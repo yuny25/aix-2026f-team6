@@ -11,8 +11,8 @@
 
 | 항목 Item | 내용 |
 |---|---|
-| 선택한 주제 Chosen |  |
-| 선택 근거 Why |  |
+| 선택한 주제 Chosen | 각자의 위치에서 중간지점을 찾아내는 것 |
+| 선택 근거 Why | 후보중에 가장 paypoint와 성공기준이 명확함 |
 
 ## ② 성공 기준 가져오기 / Success criteria from Week 3
 
