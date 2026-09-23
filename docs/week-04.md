@@ -12,7 +12,7 @@
 | 항목 Item | 내용 |
 |---|---|
 | 선택한 주제 Chosen | 멤버 간 중간 지점의 번화가를 추천해주는 서비스 |
-| 선택 근거 Why | 후보중에 가장 paypoint와 성공기준이 명확함 |
+| 선택 근거 Why | 후보중에 가장 painpoint와 성공기준이 명확함 |
 
 ## ② 성공 기준 가져오기 / Success criteria from Week 3
 
@@ -36,7 +36,7 @@ At least two normal paths + one failure path. If "How to check" is empty, it is 
 > 확인할 동작이 더 있으면 AC-4부터 행을 추가해 쓰십시오.
 > If there are more behaviors to check, add rows from AC-4.
 
-- [ ] 이번 활동에서 AI를 사용했다면 `PROMPTS.md`에 기록했습니다 / Logged any AI use in `PROMPTS.md`
+- [x] 이번 활동에서 AI를 사용했다면 `PROMPTS.md`에 기록했습니다 / Logged any AI use in `PROMPTS.md`
 
 ---
 
