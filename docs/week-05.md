@@ -47,8 +47,60 @@
 
 ```mermaid
 graph LR
-  T1["#1 태스크명"] --> T3["#3 태스크명"]
-  T2["#2 태스크명"] --> T3
+    subgraph S1["#1 좌표 변환"]
+        direction TB
+        A1["A 기본 UI<br/>선행: 없음"]
+        B1["B 주소 API<br/>선행: 없음"]
+        C1["C 예외·테스트<br/>선행: B"]
+        D1["D 통합·업로드<br/>선행: A·B·C"]
+    end
+    subgraph S2["#2 중간지점·지도"]
+        direction TB
+        A2["A 평균 좌표<br/>선행: #1"]
+        B2["B 가까운 역<br/>선행: A"]
+        C2["C 지도 핀<br/>선행: A·B"]
+        D2["D 반경 원<br/>선행: C"]
+    end
+    subgraph S3["#3 주변 장소 검색"]
+        direction TB
+        A3["A 식당 FD6<br/>선행: #2"]
+        B3["B 카페 CE7<br/>선행: #2"]
+        C3["C 놀거리 CT1<br/>선행: #2"]
+        D3["D 카드 표시<br/>선행: A·B·C"]
+    end
+    subgraph S4["#4 AI 코스 추천"]
+        direction TB
+        A4["A OpenAI 연동<br/>선행: #3"]
+        B4["B 프롬프트<br/>선행: A"]
+        C4["C 시간대 필터<br/>선행: #3"]
+        D4["D 답변 파싱<br/>선행: B·C"]
+    end
+    subgraph S5["#5 연결·테스트"]
+        direction TB
+        A5["A 흐름·로딩바<br/>선행: #4"]
+        B5["B 예외 방어<br/>선행: #4"]
+        C5["C 10곳 테스트<br/>선행: A·B"]
+        D5["D 화면 다듬기<br/>선행: A"]
+    end
+    subgraph S6["#6 무료 배포"]
+        direction TB
+        A6["A Cloud 배포<br/>선행: #5·C"]
+        B6["B 모바일·PC<br/>선행: A"]
+        C6["C Key 보안<br/>선행: #5"]
+        D6["D 소개 자료<br/>선행: A·B"]
+    end
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+
+    classDef dev fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef ai fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef test fill:#FAECE7,stroke:#993C1D,color:#712B13
+    classDef deploy fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+
+    class A1,B1,C1,D1,A2,B2,C2,D2,A3,B3,C3,D3 dev
+    class A4,B4,C4,D4 ai
+    class A5,B5,C5,D5 test
+    class A6,B6,C6,D6 deploy
 ```
 
 - 지금 착수 가능 (진입 차수 0) / Can start now (in-degree 0): 
