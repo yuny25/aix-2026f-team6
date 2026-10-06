@@ -48,49 +48,78 @@
 ```mermaid
 graph LR
     subgraph S1["#1 좌표 변환"]
-        direction TB
-        A1["A 기본 UI<br/>선행: 없음"]
-        B1["B 주소 API<br/>선행: 없음"]
-        C1["C 예외·테스트<br/>선행: B"]
-        D1["D 통합·업로드<br/>선행: A·B·C"]
+        A1["A 기본 UI"]
+        B1["B 주소 API"]
+        C1["C 예외·테스트"]
+        D1["D 통합·업로드"]
     end
     subgraph S2["#2 중간지점·지도"]
-        direction TB
-        A2["A 평균 좌표<br/>선행: #1"]
-        B2["B 가까운 역<br/>선행: A"]
-        C2["C 지도 핀<br/>선행: A·B"]
-        D2["D 반경 원<br/>선행: C"]
+        A2["A 평균 좌표"]
+        B2["B 가까운 역"]
+        C2["C 지도 핀"]
+        D2["D 반경 원"]
     end
     subgraph S3["#3 주변 장소 검색"]
-        direction TB
-        A3["A 식당 FD6<br/>선행: #2"]
-        B3["B 카페 CE7<br/>선행: #2"]
-        C3["C 놀거리 CT1<br/>선행: #2"]
-        D3["D 카드 표시<br/>선행: A·B·C"]
+        A3["A 식당 FD6"]
+        B3["B 카페 CE7"]
+        C3["C 놀거리 CT1"]
+        D3["D 카드 표시"]
     end
     subgraph S4["#4 AI 코스 추천"]
-        direction TB
-        A4["A OpenAI 연동<br/>선행: #3"]
-        B4["B 프롬프트<br/>선행: A"]
-        C4["C 시간대 필터<br/>선행: #3"]
-        D4["D 답변 파싱<br/>선행: B·C"]
+        A4["A OpenAI 연동"]
+        B4["B 프롬프트"]
+        C4["C 시간대 필터"]
+        D4["D 답변 파싱"]
     end
     subgraph S5["#5 연결·테스트"]
-        direction TB
-        A5["A 흐름·로딩바<br/>선행: #4"]
-        B5["B 예외 방어<br/>선행: #4"]
-        C5["C 10곳 테스트<br/>선행: A·B"]
-        D5["D 화면 다듬기<br/>선행: A"]
+        A5["A 흐름·로딩바"]
+        B5["B 예외 방어"]
+        C5["C 10곳 테스트"]
+        D5["D 화면 다듬기"]
     end
     subgraph S6["#6 무료 배포"]
-        direction TB
-        A6["A Cloud 배포<br/>선행: #5·C"]
-        B6["B 모바일·PC<br/>선행: A"]
-        C6["C Key 보안<br/>선행: #5"]
-        D6["D 소개 자료<br/>선행: A·B"]
+        A6["A Cloud 배포"]
+        B6["B 모바일·PC"]
+        C6["C Key 보안"]
+        D6["D 소개 자료"]
     end
 
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    B1 --> C1
+    A1 --> D1
+    B1 --> D1
+    C1 --> D1
+
+    D1 --> A2
+    A2 --> B2
+    A2 --> C2
+    B2 --> C2
+    C2 --> D2
+
+    D2 --> A3
+    D2 --> B3
+    D2 --> C3
+    A3 --> D3
+    B3 --> D3
+    C3 --> D3
+
+    D3 --> A4
+    D3 --> C4
+    A4 --> B4
+    B4 --> D4
+    C4 --> D4
+
+    D4 --> A5
+    D4 --> B5
+    A5 --> C5
+    B5 --> C5
+    A5 --> D5
+
+    C5 --> C6
+    D5 --> C6
+    C6 --> A6
+    A6 --> B6
+    A6 --> D6
+    B6 --> D6
 
     classDef dev fill:#EEEDFE,stroke:#534AB7,color:#3C3489
     classDef ai fill:#E1F5EE,stroke:#0F6E56,color:#085041
