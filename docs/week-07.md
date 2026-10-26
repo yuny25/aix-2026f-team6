@@ -9,7 +9,40 @@
 손그림 사진을 올리고 링크하십시오 / Upload a photo and link it.
 
 ![architecture](img/week-07-arch.png)
+```mermaid
 
+flowchart TD
+
+    subgraph P["표현 계층 (Presentation Layer)"]
+        P1["방 생성 UI"]
+        P2["일상 작성 UI"]
+        P3["소설 조회 UI"]
+        P4["투표 UI"]
+        P5["결과 공유 UI"]
+    end
+
+    subgraph L["로직 계층 (Logic Layer)"]
+        L1["방 관리"]
+        L2["AI 소설 생성"]
+        L3["투표 집계"]
+        L4["삽화 생성"]
+        L5["익명화 처리"]
+        L6["공유 처리"]
+    end
+
+    subgraph D["데이터 계층 (Data Layer)"]
+        D1["Room Repository"]
+        D2["Story Repository"]
+        D3["Vote Repository"]
+        D4["Image Storage"]
+        D5["OpenAI API"]
+        D6["Image Generation API"]
+    end
+
+    P --> L
+    L --> D
+
+```
 | 계층 / Layer | 모듈·파일 / Modules | 의존하지 않는 것 / Does not depend on |
 |---|---|---|
 | 표현 / Presentation | 방 생성, 일상 작성, 소설 조회, 투표, 결과 공유 UI | DB, API 세부 구현 |
