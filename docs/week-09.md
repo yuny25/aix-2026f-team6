@@ -2,8 +2,8 @@
 
 **개발 착수 / Starting development**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
+- 작성일 / Date: 2026/10/28
+- 참여자 / Present: 장윤영, 김현승, 박정하, 이다현
 
 ---
 
