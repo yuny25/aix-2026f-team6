@@ -21,7 +21,7 @@ from collections import Counter
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import novelstreamlit as st
+import streamlit as st
 
 # ─────────────────────────────────────────────────────────────
 # 설정값
