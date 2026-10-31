@@ -270,60 +270,92 @@ def get_api_key():
 
 def _generate(model: str, body: dict, timeout: int) -> dict:
     key = get_api_key()
+
     if not key:
         raise AIUnavailable()
-    try:
-        for attempt in range(3):
+
+    max_attempts = 4
+
+    for attempt in range(max_attempts):
+        try:
+            r = requests.post(
+                f"{API_BASE}/models/{model}:generateContent",
+                headers={
+                    "x-goog-api-key": key,
+                    "Content-Type": "application/json"
+                },
+                json=body,
+                timeout=(15, timeout)
+            )
+
+            # 정상 응답
+            if r.status_code == 200:
+                data = r.json()
+
+                if (data.get("promptFeedback") or {}).get("blockReason"):
+                    raise AIBlocked()
+
+                cands = data.get("candidates") or []
+
+                if not cands:
+                    raise AIBlocked()
+
+                if "SAFETY" in str(cands[0].get("finishReason", "")):
+                    raise AIBlocked()
+
+                return cands[0]
+            
+             # 재시도할 오류
+            if r.status_code in (429, 500, 502, 503, 504):
+                if attempt < max_attempts - 1:
+                    wait = 2 ** (attempt + 1)
+
+                    print(
+                        f"[AI] HTTP {r.status_code} "
+                        f"- {wait}초 후 재시도 "
+                        f"({attempt + 1}/{max_attempts - 1})",
+                        file=sys.stderr
+                    )
+
+                    time.sleep(wait)
+                    continue
+
+            # 재시도 대상이 아니거나 재시도 횟수 초과
             try:
-                r = requests.post(
-                    f"{API_BASE}/models/{model}:generateContent",
-                    headers={
-                        "x-goog-api-key": key,
-                        "Content-Type": "application/json"
-                    },
-                    json=body,
-                    timeout=(15,180)
+                detail = (r.json().get("error") or {}).get("message", "")
+            except ValueError:
+                detail = ""
+
+            print(
+                f"[AI] {model} HTTP {r.status_code}: {detail[:300]}",
+                file=sys.stderr
+            )
+
+            raise AIError(f"HTTP {r.status_code}")
+
+        except AIBlocked:
+            raise
+
+        except requests.RequestException as e:
+            if attempt < max_attempts - 1:
+                wait = 2 ** (attempt + 1)
+
+                print(
+                    f"[AI] {type(e).__name__} "
+                    f"- {wait}초 후 재시도",
+                    file=sys.stderr
                 )
 
-                # 일시적인 서버 오류라면 재시도
-                if r.status_code not in (429, 500, 502, 503, 504):
-                    break
-
-                if attempt == 2:
-                    break
-
-                wait = 2 ** (attempt + 1)
-                print(f"[AI] HTTP {r.status_code}, {wait}초 후 재시도")
                 time.sleep(wait)
+                continue
 
-            except requests.exceptions.Timeout as e:
-                if attempt == 2:
-                    raise AIError("ReadTimeout: 3회 요청 모두 시간 초과") from e
+            raise AIError(type(e).__name__) from e
 
-                wait = 2 ** (attempt + 1)
-                print(f"[AI] Timeout 발생, {wait}초 후 재시도")
-                time.sleep(wait)
+    raise AIError("재시도 횟수 초과")
 
-    except requests.RequestException as e:
-        raise AIError(type(e).__name__) from e
+
+
     
-    if r.status_code != 200:
-        # 원인 파악용 로그(터미널에만 출력, 키는 포함하지 않음)
-        try:
-            detail = (r.json().get("error") or {}).get("message", "")
-        except ValueError:
-            detail = ""
-        print(f"[AI] {model} HTTP {r.status_code}: {detail[:300]}", file=sys.stderr)
-        raise AIError(f"HTTP {r.status_code}")
-    data = r.json()
-    if (data.get("promptFeedback") or {}).get("blockReason"):
-        raise AIBlocked()
-    cands = data.get("candidates") or []
-    if not cands:
-        raise AIBlocked()
-    if "SAFETY" in str(cands[0].get("finishReason", "")):
-        raise AIBlocked()
-    return cands[0]
 
 
 def gemini_text(prompt: str) -> str:
