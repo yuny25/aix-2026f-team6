@@ -20,7 +20,7 @@
 
 ## 브랜치 이름 규칙 / Branch naming rule
 
-[유형] / [설명]
+- [유형] / [설명]
 - main/ : 상용(Production) 배포용 메인 브랜치
 - feat/ : 새로운 기능 개발
 - bugfix/ : 버그 수정
@@ -30,7 +30,7 @@
 
 ## 커밋 메시지 규칙 / Commit message rule
 
-[유형]: [설명]
+- [유형]: [설명]
 - 무엇을 왜 변경했는지 작성
 
 ## 각자 PR 번호 / 리뷰어 / Each member's PR / reviewer
