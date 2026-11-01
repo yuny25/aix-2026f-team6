@@ -3,7 +3,7 @@
 **저장소와 첫 PR / Repository and first pull request**
 
 - 작성일 / Date: 26.11.01
-- 참여자 / Present: 김현승
+- 참여자 / Present: 장윤영, 김현승, 박정하, 이다현
 - 최종 반영 / Feeds into: 제출물 ① 저장소 / Submission ①
 
 ---
@@ -30,7 +30,7 @@
 
 ## 커밋 메시지 규칙 / Commit message rule
 
-- [유형]: [설명]
+- "[유형]: [설명]"
 - 무엇을 왜 변경했는지 작성
 
 ## 각자 PR 번호 / 리뷰어 / Each member's PR / reviewer
