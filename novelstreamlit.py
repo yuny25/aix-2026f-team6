@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-일상 릴스토리(가제) - Streamlit 단일 파일 MVP
+Dayfic - Streamlit 단일 파일 MVP
 
 흐름: 방 만들기 -> 일상 입력(20~150자) -> AI 소설 변환(약 500자)
       -> 익명 투표(기본 12시간) -> 1등 소설 + 득표수 + AI 삽화 1장
@@ -55,7 +55,7 @@ SHOW_VOTE_HOURS_SELECT = os.getenv("SHOW_VOTE_HOURS_SELECT", "0") == "1"  # MVP:
 VOTE_MINUTES_DEBUG = os.getenv("VOTE_MINUTES_DEBUG")
 
 ROOM_TTL_DAYS = int(os.getenv("ROOM_TTL_DAYS", "7"))   # 10장 7번 가정
-MAX_MEMBERS = int(os.getenv("MAX_MEMBERS", "10"))      # 10장 6번: 미정, AI 비용 때문에 상한
+MAX_MEMBERS = int(os.getenv("MAX_MEMBERS", "5"))      # 10장 6번: AI 비용 때문에 상한
 ILLUST_STALE_SEC = 180                  # '생성 중' 3분 초과 시 선점 해제
 ILLUST_MAX_ATTEMPTS = 3                 # 방당 삽화 생성 시도 상한(비용 보호)
 POLL_SEC = 5                            # 다른 참여자 변화 확인 주기
@@ -64,13 +64,41 @@ API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # 모델명은 개발 단계에서 비교 후 정하기로 했으므로 환경 변수로 교체 가능
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
 IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
-# FR-10: "명장면 일러스트" 또는 "4컷 만화" (결정 전까지 명장면)
-ILLUST_STYLE = os.getenv("ILLUST_STYLE", "명장면 일러스트")
 
 GENRES = {
     "현대판타지": "현대 한국에 던전과 각성자가 존재한다. 헌터, 길드, 게이트, 스킬 창 같은 용어를 쓴다.",
     "무협": "강호의 문파와 무림인이 존재한다. 내공, 초식, 객잔, 사부, 문파 같은 용어를 쓴다.",
     "로맨스판타지": "황실과 귀족 사회가 있는 세계다. 영애, 공작가, 황태자, 빙의 같은 요소와 설렘의 분위기를 쓴다.",
+}
+
+# 장르별 삽화 그림 방식 (명세 7장). 키는 GENRES와 동일해야 함
+ILLUST_STYLES: dict[str, str] = {
+    "현대판타지": (
+        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "polished character rendering, refined linework, detailed facial features, "
+        "sophisticated lighting and shading, modern urban fantasy atmosphere, "
+        "contemporary cityscapes blended with supernatural elements, mystical magical effects, "
+        "glowing energy and intricate magic circles, dramatic cinematic lighting, "
+        "cool and vivid color palette, immersive composition, visually striking fantasy aesthetics."
+    ),
+    "무협": (
+        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "polished character rendering, refined linework, detailed facial features, "
+        "sophisticated lighting and shading, traditional Eastern martial arts fantasy atmosphere, "
+        "elegant traditional robes with flowing fabric, dynamic swordsmanship and martial arts poses, "
+        "mystical qi energy effects, detailed Eastern architecture, misty mountains and traditional landscapes, "
+        "dramatic cinematic composition, rich and harmonious color palette, "
+        "powerful yet graceful visual expression."
+    ),
+    "로맨스판타지": (
+        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "polished character rendering, refined linework, delicate facial features, "
+        "sophisticated lighting and shading, elegant European-inspired fantasy atmosphere, "
+        "luxurious aristocratic costumes, intricate lace embroidery and sparkling jewelry, "
+        "majestic castles and enchanting gardens, graceful character poses, expressive romantic emotions, "
+        "soft luminous lighting, refined pastel and jewel-tone color palette, ethereal atmosphere, "
+        "visually captivating and elegant composition."
+    ),
 }
 
 PHASE_LABEL = {"input": "✏️ 일상 쓰는 중", "vote": "🗳️ 투표 중", "closed": "🏁 종료"}
@@ -406,15 +434,36 @@ def build_story_prompt(genre: str, daily: str) -> str:
         "7. 제목, 설명, 머리말 없이 소설 본문만 출력한다."
     )
 
+def build_illust_prompt(story: str, genre: str) -> str:
+    style = ILLUST_STYLES.get(genre)
+    if style is None:
+        raise ValueError(f"지원하지 않는 장르입니다: {genre!r}")
 
-def build_illust_prompt(story: str) -> str:
-    return (
-        f"아래 소설에서 가장 인상적인 한 장면을 골라 [그림 방식]으로 그려라.\n"
-        f"[소설] {story}\n"
-        f"[그림 방식] {ILLUST_STYLE}\n"
-        "규칙: 실존 인물과 닮게 그리지 않는다. 글자와 말풍선 문구는 넣지 않거나 최소로 한다. "
-        "장르의 분위기와 색감을 살린다."
-    )
+    return f"""아래 소설을 읽고 가장 인상적이고 상징적인 장면 하나를 선정하여, 지정된 장르와 그림 방식에 맞는 고품질 삽화를 생성하라.
+
+[소설]
+{story}
+
+[장르]
+{genre}
+
+[그림 방식]
+{style}
+
+[장면 선정 및 표현 규칙]
+1. 소설의 핵심 사건, 감정, 분위기를 가장 잘 전달하는 장면 하나를 선정한다.
+2. 인물의 표정, 자세, 배경, 소품 등 장면을 구성하는 요소를 소설의 맥락에 맞게 표현한다.
+3. 지정된 그림 방식의 시각적 특징(색상 팔레트, 선의 표현, 질감, 명암, 조명, 구도)을 충실히 반영한다.
+4. 장르 고유의 분위기와 감정적 긴장감을 시각적으로 극대화한다.
+5. 소설에 명시되지 않은 인물의 외모나 배경은 장르와 문맥에 어울리도록 자연스럽게 창작하되, 원작의 설정과 모순되지 않도록 한다.
+
+[공통 제약 조건]
+- 실존 인물이나 특정 유명인의 외모를 모방하지 않는다.
+- 이미지 내 글자, 자막, 말풍선, 워터마크는 넣지 않거나 최소화한다.
+- 장르와 그림 방식이 서로 조화를 이루도록 한다.
+- 장면의 핵심 요소가 잘 드러나도록 시각적 우선순위와 구도를 구성한다.
+- 하나의 완성된 소설 삽화로 생성한다."""
+
 
 
 def clean_story(text: str) -> str:
@@ -701,13 +750,14 @@ def illust_area(code: str, dev: str):
             claim = True
 
     if claim:
-        story = room["stories"][winners[0]]["text"]  # 공동 1등이면 먼저 제출한 작품
+        win = room["stories"][winners[0]]  # 공동 1등이면 먼저 제출한 작품
+        story, genre = win["text"], win["genre"]
         with st.spinner("1등 작품의 삽화를 그리는 중이에요…"):
             try:
-                img, mime = gemini_image(build_illust_prompt(story))
+                img, mime = gemini_image(build_illust_prompt(story, genre))
                 with store.lock:
                     il.update(status="done", image=img, mime=mime)
-            except (AIError, AIBlocked, AIUnavailable):
+            except (AIError, AIBlocked, AIUnavailable, ValueError):
                 with store.lock:
                     il["status"] = "waiting"  # 소설만 먼저 보여주고 다음 접속자가 재시도
                 st.session_state[f"illust_fail_{code}"] = True
