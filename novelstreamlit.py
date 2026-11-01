@@ -31,6 +31,7 @@ import uuid
 from collections import Counter
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
 import requests
 import streamlit as st
@@ -49,8 +50,9 @@ MIN_CHARS, MAX_CHARS = 20, 150          # 입력 글자수 (공백 포함)
 STORY_MIN, STORY_MAX = 450, 550         # 출력 글자수 (공백 포함)
 
 DEFAULT_VOTE_HOURS = 12                 # 10장 3번 가정
-VOTE_HOURS_OPTIONS = (10, 12)           # FR-11 (Could)
-SHOW_VOTE_HOURS_SELECT = os.getenv("SHOW_VOTE_HOURS_SELECT", "0") == "1"  # MVP: 숨김
+#VOTE_HOURS_OPTIONS = (10, 12)           # FR-11 (Could)
+#SHOW_VOTE_HOURS_SELECT = os.getenv("SHOW_VOTE_HOURS_SELECT", "0") == "1"  # MVP: 숨김
+MIN_VOTE_MINUTES = 5
 # 개발 중 빠른 테스트용: 투표 시간을 '분' 단위로 덮어씀 (prod 에서는 무시)
 VOTE_MINUTES_DEBUG = os.getenv("VOTE_MINUTES_DEBUG")
 
@@ -157,7 +159,7 @@ def effective_phase(room: dict) -> str:
         return room["phase"]
 
 
-def create_room(host_id: str, hours: int):
+def create_room(host_id: str):
     """FR-01. 코드 중복 시 최대 5회 재시도."""
     store = get_store()
     with store.lock:
@@ -172,7 +174,6 @@ def create_room(host_id: str, hours: int):
                 "created": now(),
                 "vote_start": None,
                 "vote_end": None,
-                "vote_hours": hours,
                 "members": {host_id},
                 "stories": {},      # story_id -> {author, genre, text, ts}
                 "pending": set(),   # AI 변환 중인 기기ID
@@ -209,8 +210,8 @@ def story_of(room: dict, dev: str):
     return None, None
 
 
-def start_vote(room: dict, dev: str):
-    """FR-05. 방장만, 작품 1건 이상, 변환 진행 중이면 대기."""
+def start_vote(room: dict, dev: str, end_at: float):
+    """FR-05. 방장만, 전원 제출 후, 종료 시각은 방장이 정한 값"""
     with get_store().lock:
         if room["host"] != dev:
             return False, "방장만 투표를 시작할 수 있어요"
@@ -218,14 +219,19 @@ def start_vote(room: dict, dev: str):
             return False, "이미 입력이 마감됐어요"
         if not room["stories"]:
             return False, "아직 제출된 일상이 없어요"
+        submitted = {s["author"] for s in room["stories"].values()}
+        if not room["members"] <= submitted:
+            return False, "아직 제출하지 않은 참여자가 있어요"
         if room["pending"]:
             return False, "소설을 만드는 중인 참여자가 있어요. 잠시만 기다려 주세요"
-        hours = room["vote_hours"]
-        seconds = hours * 3600
-        if VOTE_MINUTES_DEBUG and APP_ENV != "prod":
-            seconds = float(VOTE_MINUTES_DEBUG) * 60
+        if end_at < now() + MIN_VOTE_MINUTES * 60:
+            return False, f"종료 시각은 지금부터 {MIN_VOTE_MINUTES}분 뒤 이후로 정해 주세요"
+        if end_at > room["created"] + ROOM_TTL_DAYS * 86400:
+            return False, f"종료 시각은 방 보관 기간({ROOM_TTL_DAYS}일) 안으로 정해 주세요"
         room["vote_start"] = now()
-        room["vote_end"] = room["vote_start"] + seconds
+        room["vote_end"] = end_at
+        if VOTE_MINUTES_DEBUG and APP_ENV != "prod":  # 테스트용: 분 단위로 덮어쓰기
+            room["vote_end"] = room["vote_start"] + float(VOTE_MINUTES_DEBUG) * 60
         room["phase"] = "vote"
         return True, ""
 
@@ -264,6 +270,24 @@ def tally(room: dict):
     top = max(counts.values())
     ordered = sorted(room["stories"].items(), key=lambda kv: kv[1]["ts"])
     return [sid for sid, _ in ordered if counts.get(sid) == top], top
+
+def story_label(room: dict, sid: str) -> str:
+    ordered = sorted(room["stories"], key=lambda k: room["stories"][k]["ts"])
+    return f"작품 {ordered.index(sid) + 1}"
+
+
+def ranking(room: dict):
+    """[(순위, story_id, 득표수)] - 동점은 같은 순위."""
+    counts = Counter(room["votes"].values())
+    items = sorted(room["stories"].items(),
+                   key=lambda kv: (-counts.get(kv[0], 0), kv[1]["ts"]))
+    out, prev, rank = [], None, 0
+    for i, (sid, _) in enumerate(items, 1):
+        v = counts.get(sid, 0)
+        if v != prev:
+            rank, prev = i, v
+        out.append((rank, sid, v))
+    return out
 
 
 # ─────────────────────────────────────────────────────────────
@@ -359,7 +383,7 @@ def _generate(model: str, body: dict, timeout: int) -> dict:
                 file=sys.stderr
             )
 
-            raise AIError(f"HTTP {r.status_code}")
+            raise AIError(f"HTTP {r.status_code}: {detail[:200]}")
 
         except AIBlocked:
             raise
@@ -545,8 +569,13 @@ def init_identity() -> str:
 
 
 def leave_room(dev: str):
+    code = st.session_state.get("room_code")
     store = get_store()
     with store.lock:
+        room = store.rooms.get(code) if code else None
+        if (room and room["phase"] == "input"
+                and not story_of(room, dev)[0] and dev not in room["pending"]):
+            room["members"].discard(dev)
         store.last_room.pop(dev, None)
     st.session_state.pop("room_code", None)
     for k in [k for k in st.session_state if k.startswith(("genre_", "text_"))]:
@@ -562,14 +591,10 @@ def view_home(dev: str):
     tab_create, tab_join = st.tabs(["방 만들기", "방 입장"])
 
     with tab_create:
-        hours = DEFAULT_VOTE_HOURS
-        if SHOW_VOTE_HOURS_SELECT:  # FR-11 (MVP에서는 숨김)
-            hours = st.radio("투표 시간", VOTE_HOURS_OPTIONS,
-                             index=VOTE_HOURS_OPTIONS.index(DEFAULT_VOTE_HOURS),
-                             format_func=lambda h: f"{h}시간", horizontal=True)
         st.write("방을 만들면 6자리 코드가 생겨요. 코드를 지인에게 알려 주세요.")
+        st.caption("투표 종료 시각은 모두 제출한 뒤, 투표를 시작할 때 정해요.")
         if st.button("방 만들기", type="primary", use_container_width=True):
-            code = create_room(dev, hours)
+            code = create_room(dev)
             if code:
                 st.session_state["room_code"] = code
                 st.rerun()
@@ -598,28 +623,70 @@ def view_home(dev: str):
 # ─────────────────────────────────────────────────────────────
 @st.fragment(run_every=POLL_SEC)
 def live_panel(code: str, dev: str, shown_phase: str):
-    """제출 현황 + 방장 '투표 시작' 버튼. 단계가 바뀌면 전체 화면을 갱신."""
+    """제출 현황 + 방장 '투표 시작'. 단계가 바뀌면 전체 화면을 갱신."""
     room, _ = find_room(code)
     if room is None or effective_phase(room) != shown_phase:
         st.rerun()
         return
     n, pend = len(room["stories"]), len(room["pending"])
+    submitted = {s["author"] for s in room["stories"].values()}
+    waiting = len(room["members"] - submitted)
     info = f"제출된 일상 {n}건 · 참여자 {len(room['members'])}명"
+    if waiting:
+        info += f" · 미제출 {waiting}명"
     if pend:
         info += f" · 변환 중 {pend}건"
     st.caption(info)
 
-    if room["host"] == dev:
-        if n == 0:
-            st.caption("아직 제출된 일상이 없어요")
-        if st.button("투표 시작", type="primary", disabled=(n == 0 or pend > 0),
-                     key=f"start_{code}", use_container_width=True,
-                     help="입력을 마감하고 익명 투표를 시작해요"):
-            ok, msg = start_vote(room, dev)
-            if ok:
-                st.rerun()
-            else:
-                st.error(msg)
+    if room["host"] != dev:
+        return
+
+    ready = n > 0 and pend == 0 and waiting == 0
+    if not ready:
+        st.caption("모든 참여자가 제출하면 투표 종료 시각을 정하고 시작할 수 있어요")
+        st.button("투표 시작", type="primary", disabled=True,
+                  key=f"start_off_{code}", use_container_width=True)
+        return
+    
+    dk = f"end_default_{code}"  # 전원 제출된 시점 기준 기본값(12시간 뒤)
+    if dk not in st.session_state:
+        st.session_state[dk] = datetime.fromtimestamp(now() + DEFAULT_VOTE_HOURS * 3600, TZ)
+    d0 = st.session_state[dk]
+    today = datetime.now(TZ).date()
+
+    st.success("모두 제출했어요! 투표 종료 시각을 정해 주세요.")
+    c1, c2 = st.columns(2)
+    with c1:
+        end_date = st.date_input("투표 종료 날짜", value=d0.date(), min_value=today,
+                                 max_value=today + timedelta(days=ROOM_TTL_DAYS),
+                                 key=f"end_date_{code}")
+    with c2:
+        end_time = st.time_input("투표 종료 시각", value=d0.time().replace(second=0, microsecond=0),
+                                 step=300, key=f"end_time_{code}")
+    end_at = datetime.combine(end_date, end_time, tzinfo=TZ).timestamp()
+    st.caption(f"투표는 {fmt_time(end_at)}(한국 시간)에 끝나요.")
+
+    if st.button("투표 시작", type="primary", key=f"start_{code}",
+                 use_container_width=True, help="입력을 마감하고 익명 투표를 시작해요"):
+        ok, msg = start_vote(room, dev, end_at)
+        if ok:
+            st.rerun()
+        else:
+            st.error(msg)
+
+@st.fragment(run_every=POLL_SEC)
+def story_list(code: str, dev: str):
+    room, _ = find_room(code)
+    if room is None:
+        return
+    ids = sorted(room["stories"])
+    random.Random(f"{dev}:{code}").shuffle(ids)  # 기기마다 다른 순서
+    for sid in ids:
+        s = room["stories"][sid]
+        with st.container(border=True):
+            tag = " (내 작품)" if s["author"] == dev else ""
+            st.markdown(f"**{story_label(room, sid)}**{tag} · {s['genre']}")
+            st.code(s["text"], language=None, wrap_lines=True)  # 오른쪽 위 아이콘으로 복사
 
 
 def view_input(code: str, room: dict, dev: str):
@@ -628,10 +695,9 @@ def view_input(code: str, room: dict, dev: str):
     sid, mine = story_of(room, dev)
     if mine:
         st.success("제출 완료! 방장이 투표를 시작하면 알려 드려요(자동으로 화면이 바뀌어요).")
-        with st.container(border=True):
-            st.markdown(f"**내 작품** · {mine['genre']}")
-            st.markdown(md_safe(mine["text"]))
-        st.caption("원문은 저장하지 않으며, 다른 사람에게 작성자는 보이지 않아요.")
+        st.subheader("소설 목록")
+        st.caption("작성자는 보이지 않아요. 각 작품 오른쪽 위 아이콘으로 복사할 수 있어요.")
+        story_list(code, dev)
         return
 
     st.subheader("오늘의 일상")
@@ -800,6 +866,12 @@ def view_closed(code: str, room: dict, dev: str):
             st.info("투표가 없어 결과가 없어요")
         return
 
+    st.subheader("📊 전체 순위")
+    for rank, sid, v in ranking(room):
+        mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
+        mark = " 🏆" if sid in winners else ""
+        st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
+
     st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
     for sid in winners:
         s = room["stories"][sid]
@@ -840,9 +912,9 @@ def view_room(code: str, room: dict, dev: str):
 # 진입점
 # ─────────────────────────────────────────────────────────────
 def main():
-    st.set_page_config(page_title="일상 릴스토리", page_icon="📖", layout="centered")
+    st.set_page_config(page_title="Dayfic", page_icon="📖", layout="centered")
     dev = init_identity()
-    st.title("📖 일상 릴스토리")
+    st.title("📖 Dayfic")
     if APP_ENV != "prod":
         st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
 
