@@ -2,17 +2,17 @@
 
 **저장소와 첫 PR / Repository and first pull request**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
+- 작성일 / Date: 26.11.01
+- 참여자 / Present: 김현승
 - 최종 반영 / Feeds into: 제출물 ① 저장소 / Submission ①
 
 ---
 
 ## 초기 파일 / Initial files
 
-- [ ] README
-- [ ] LICENSE
-- [ ] .gitignore
+- [x] README
+- [x] LICENSE
+- [x] .gitignore
 
 ## 팀원 초대 수락 / Invitations accepted
 
