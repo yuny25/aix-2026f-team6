@@ -116,7 +116,7 @@ class Store:
         self.lock = threading.RLock()
         self.rooms: dict[str, dict] = {}
         self.last_room: dict[str, str] = {}  # 기기ID -> 마지막 방 (새로고침 복구용)
-
+        self.closed: dict[str, float] = {}   # 방장이 나가서 닫힌 방 코드 -> 닫힌 시각
 
 @st.cache_resource
 def get_store() -> Store:
@@ -147,6 +147,8 @@ def find_room(code: str):
     with store.lock:
         room = store.rooms.get(code)
         if room is None:
+            if code in store.closed:
+                return None, "host_left"
             return None, "missing"
         if now() - room["created"] > ROOM_TTL_DAYS * 86400:
             del store.rooms[code]
@@ -195,6 +197,8 @@ def join_room(code: str, dev: str):
         return False, "방을 찾을 수 없어요"
     if status == "expired":
         return False, "만료된 방이에요"
+    if status == "host_left":
+        return False, "방장이 나가서 닫힌 방이에요"
     store = get_store()
     with store.lock:
         if dev not in room["members"]:
@@ -575,7 +579,11 @@ def leave_room(dev: str):
     store = get_store()
     with store.lock:
         room = store.rooms.get(code) if code else None
-        if (room and room["phase"] == "input"
+        if room and room["host"] == dev:
+            # 방장이 나가면 방을 지운다. 다른 참여자는 다음 갱신 때 홈으로 돌아간다.
+            del store.rooms[code]
+            store.closed[code] = now()
+        elif (room and room["phase"] == "input"
                 and not story_of(room, dev)[0] and dev not in room["pending"]):
             room["members"].discard(dev)
         store.last_room.pop(dev, None)
@@ -941,7 +949,9 @@ def main():
         if room is None:
             st.session_state.pop("room_code", None)
             store.last_room.pop(dev, None)
-            st.warning("방을 찾을 수 없어요" if status == "missing" else "만료된 방이에요")
+            st.warning({"missing": "방을 찾을 수 없어요",
+                        "expired": "만료된 방이에요",
+                        "host_left": "방장이 방을 나가서 방이 닫혔어요"}.get(status, "방을 찾을 수 없어요"))
             view_home(dev)
         else:
             st.session_state["room_code"] = code
