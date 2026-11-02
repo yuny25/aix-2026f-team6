@@ -29,9 +29,9 @@ import threading
 import time
 import uuid
 from collections import Counter
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
+from datetime import time as dtime
+from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
@@ -64,7 +64,7 @@ POLL_SEC = 5                            # 다른 참여자 변화 확인 주기
 
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # 모델명은 개발 단계에서 비교 후 정하기로 했으므로 환경 변수로 교체 가능
-TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
+TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite")
 IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
 
 GENRES = {
@@ -129,7 +129,9 @@ def now() -> float:
 
 
 def fmt_time(ts: float) -> str:
-    return datetime.fromtimestamp(ts, TZ).strftime("%m/%d %H:%M")
+    dt = datetime.fromtimestamp(ts, TZ)
+    ampm = "오전" if dt.hour < 12 else "오후"
+    return f"{dt.month}/{dt.day} {ampm} {dt.hour % 12 or 12}:{dt.minute:02d}"
 
 
 def fmt_remaining(sec: float) -> str:
@@ -655,15 +657,22 @@ def live_panel(code: str, dev: str, shown_phase: str):
     today = datetime.now(TZ).date()
 
     st.success("모두 제출했어요! 투표 종료 시각을 정해 주세요.")
-    c1, c2 = st.columns(2)
+    end_date = st.date_input("투표 종료 날짜", value=d0.date(), min_value=today,
+                             max_value=today + timedelta(days=ROOM_TTL_DAYS),
+                             key=f"end_date_{code}")
+    st.caption("투표 종료 시각")
+    c1, c2, c3 = st.columns(3)
     with c1:
-        end_date = st.date_input("투표 종료 날짜", value=d0.date(), min_value=today,
-                                 max_value=today + timedelta(days=ROOM_TTL_DAYS),
-                                 key=f"end_date_{code}")
+        ampm = st.selectbox("오전/오후", ["오전", "오후"], index=0 if d0.hour < 12 else 1,
+                            key=f"end_ampm_{code}")
     with c2:
-        end_time = st.time_input("투표 종료 시각", value=d0.time().replace(second=0, microsecond=0),
-                                 step=300, key=f"end_time_{code}")
-    end_at = datetime.combine(end_date, end_time, tzinfo=TZ).timestamp()
+        hour12 = st.selectbox("시", list(range(1, 13)), index=(d0.hour % 12 or 12) - 1,
+                              key=f"end_hour_{code}")
+    with c3:
+        minute = st.selectbox("분", list(range(0, 60, 5)), index=d0.minute // 5,
+                              format_func=lambda m: f"{m:02d}", key=f"end_min_{code}")
+    hour24 = hour12 % 12 + (12 if ampm == "오후" else 0)
+    end_at = datetime.combine(end_date, dtime(hour24, minute), tzinfo=TZ).timestamp()
     st.caption(f"투표는 {fmt_time(end_at)}(한국 시간)에 끝나요.")
 
     if st.button("투표 시작", type="primary", key=f"start_{code}",
@@ -881,7 +890,14 @@ def view_closed(code: str, room: dict, dev: str):
             if s["author"] == dev:
                 st.caption("🎉 내가 쓴 작품이에요!")
     illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
-    st.caption("2등 이하는 공개하지 않아요")
+    st.subheader("📚 전체 소설 목록")
+    st.caption("각 작품 오른쪽 위 아이콘으로 복사할 수 있어요.")
+    for rank, sid, v in ranking(room):
+        s = room["stories"][sid]
+        mine = " (내 작품)" if s["author"] == dev else ""
+        with st.container(border=True):
+            st.markdown(f"**{rank}위 · {story_label(room, sid)}**{mine} · {s['genre']} · {v}표")
+            st.code(s["text"], language=None, wrap_lines=True)
 
 
 # ─────────────────────────────────────────────────────────────
