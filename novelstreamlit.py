@@ -29,9 +29,9 @@ import threading
 import time
 import uuid
 from collections import Counter
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
+from datetime import time as dtime
+from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
@@ -49,10 +49,8 @@ CODE_RETRY = 5
 MIN_CHARS, MAX_CHARS = 20, 150          # 입력 글자수 (공백 포함)
 STORY_MIN, STORY_MAX = 450, 550         # 출력 글자수 (공백 포함)
 
-DEFAULT_VOTE_HOURS = 12                 # 10장 3번 가정
-#VOTE_HOURS_OPTIONS = (10, 12)           # FR-11 (Could)
-#SHOW_VOTE_HOURS_SELECT = os.getenv("SHOW_VOTE_HOURS_SELECT", "0") == "1"  # MVP: 숨김
 MIN_VOTE_MINUTES = 5
+DEFAULT_VOTE_MINUTES = MIN_VOTE_MINUTES + 1
 # 개발 중 빠른 테스트용: 투표 시간을 '분' 단위로 덮어씀 (prod 에서는 무시)
 VOTE_MINUTES_DEBUG = os.getenv("VOTE_MINUTES_DEBUG")
 
@@ -64,7 +62,7 @@ POLL_SEC = 5                            # 다른 참여자 변화 확인 주기
 
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # 모델명은 개발 단계에서 비교 후 정하기로 했으므로 환경 변수로 교체 가능
-TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
+TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite")
 IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
 
 GENRES = {
@@ -116,7 +114,7 @@ class Store:
         self.lock = threading.RLock()
         self.rooms: dict[str, dict] = {}
         self.last_room: dict[str, str] = {}  # 기기ID -> 마지막 방 (새로고침 복구용)
-
+        self.closed: dict[str, float] = {}   # 방장이 나가서 닫힌 방 코드 -> 닫힌 시각
 
 @st.cache_resource
 def get_store() -> Store:
@@ -129,7 +127,9 @@ def now() -> float:
 
 
 def fmt_time(ts: float) -> str:
-    return datetime.fromtimestamp(ts, TZ).strftime("%m/%d %H:%M")
+    dt = datetime.fromtimestamp(ts, TZ)
+    ampm = "오전" if dt.hour < 12 else "오후"
+    return f"{dt.month}/{dt.day} {ampm} {dt.hour % 12 or 12}:{dt.minute:02d}"
 
 
 def fmt_remaining(sec: float) -> str:
@@ -145,6 +145,8 @@ def find_room(code: str):
     with store.lock:
         room = store.rooms.get(code)
         if room is None:
+            if code in store.closed:
+                return None, "host_left"
             return None, "missing"
         if now() - room["created"] > ROOM_TTL_DAYS * 86400:
             del store.rooms[code]
@@ -193,6 +195,8 @@ def join_room(code: str, dev: str):
         return False, "방을 찾을 수 없어요"
     if status == "expired":
         return False, "만료된 방이에요"
+    if status == "host_left":
+        return False, "방장이 나가서 닫힌 방이에요"
     store = get_store()
     with store.lock:
         if dev not in room["members"]:
@@ -573,7 +577,11 @@ def leave_room(dev: str):
     store = get_store()
     with store.lock:
         room = store.rooms.get(code) if code else None
-        if (room and room["phase"] == "input"
+        if room and room["host"] == dev:
+            # 방장이 나가면 방을 지운다. 다른 참여자는 다음 갱신 때 홈으로 돌아간다.
+            del store.rooms[code]
+            store.closed[code] = now()
+        elif (room and room["phase"] == "input"
                 and not story_of(room, dev)[0] and dev not in room["pending"]):
             room["members"].discard(dev)
         store.last_room.pop(dev, None)
@@ -650,23 +658,33 @@ def live_panel(code: str, dev: str, shown_phase: str):
     
     dk = f"end_default_{code}"  # 전원 제출된 시점 기준 기본값(12시간 뒤)
     if dk not in st.session_state:
-        st.session_state[dk] = datetime.fromtimestamp(now() + DEFAULT_VOTE_HOURS * 3600, TZ)
+        st.session_state[dk] = datetime.fromtimestamp(now() + DEFAULT_VOTE_MINUTES * 60, TZ)
     d0 = st.session_state[dk]
     today = datetime.now(TZ).date()
 
     st.success("모두 제출했어요! 투표 종료 시각을 정해 주세요.")
-    c1, c2 = st.columns(2)
+    end_date = st.date_input("투표 종료 날짜", value=d0.date(), min_value=today,
+                             max_value=today + timedelta(days=ROOM_TTL_DAYS),
+                             key=f"end_date_{code}")
+    st.caption("투표 종료 시각")
+    c1, c2, c3 = st.columns(3)
     with c1:
-        end_date = st.date_input("투표 종료 날짜", value=d0.date(), min_value=today,
-                                 max_value=today + timedelta(days=ROOM_TTL_DAYS),
-                                 key=f"end_date_{code}")
+        ampm = st.selectbox("오전/오후", ["오전", "오후"], index=0 if d0.hour < 12 else 1,
+                            key=f"end_ampm_{code}")
     with c2:
-        end_time = st.time_input("투표 종료 시각", value=d0.time().replace(second=0, microsecond=0),
-                                 step=300, key=f"end_time_{code}")
-    end_at = datetime.combine(end_date, end_time, tzinfo=TZ).timestamp()
+        hour12 = st.selectbox("시", list(range(1, 13)), index=(d0.hour % 12 or 12) - 1,
+                              key=f"end_hour_{code}")
+    with c3:
+        minute = st.selectbox("분", list(range(60)), index=d0.minute,
+                              format_func=lambda m: f"{m:02d}", key=f"end_min_{code}")
+    hour24 = hour12 % 12 + (12 if ampm == "오후" else 0)
+    end_at = datetime.combine(end_date, dtime(hour24, minute), tzinfo=TZ).timestamp()
     st.caption(f"투표는 {fmt_time(end_at)}(한국 시간)에 끝나요.")
+    too_soon = end_at < now() + MIN_VOTE_MINUTES * 60
+    if too_soon:
+        st.warning(f"종료 시각은 지금부터 {MIN_VOTE_MINUTES}분 뒤 이후로 정해 주세요")
 
-    if st.button("투표 시작", type="primary", key=f"start_{code}",
+    if st.button("투표 시작", type="primary", key=f"start_{code}", disabled=too_soon,
                  use_container_width=True, help="입력을 마감하고 익명 투표를 시작해요"):
         ok, msg = start_vote(room, dev, end_at)
         if ok:
@@ -866,22 +884,38 @@ def view_closed(code: str, room: dict, dev: str):
             st.info("투표가 없어 결과가 없어요")
         return
 
-    st.subheader("📊 전체 순위")
-    for rank, sid, v in ranking(room):
-        mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
-        mark = " 🏆" if sid in winners else ""
-        st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
+    others = [(rank, sid, v) for rank, sid, v in ranking(room) if sid not in winners]
+    if others:
+        tab_result, tab_others = st.tabs(["🏆 결과", f"📚 나머지 소설 ({len(others)})"])
+    else:
+        tab_result, tab_others = st.container(), None
 
-    st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
-    for sid in winners:
-        s = room["stories"][sid]
-        with st.container(border=True):
-            st.markdown(f"{s['genre']} · **{top}표**")
-            st.code(s["text"], language=None, wrap_lines=True)
-            if s["author"] == dev:
-                st.caption("🎉 내가 쓴 작품이에요!")
-    illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
-    st.caption("2등 이하는 공개하지 않아요")
+    with tab_result:
+        st.subheader("📊 전체 순위")
+        for rank, sid, v in ranking(room):
+            mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
+            mark = " 🏆" if sid in winners else ""
+            st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
+
+        st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
+        for sid in winners:
+            s = room["stories"][sid]
+            with st.container(border=True):
+                st.markdown(f"{s['genre']} · **{top}표**")
+                st.code(s["text"], language=None, wrap_lines=True)
+                if s["author"] == dev:
+                    st.caption("🎉 내가 쓴 작품이에요!")
+        illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
+
+    if tab_others is not None:
+        with tab_others:
+            st.caption("1등을 뺀 나머지 소설이에요. 각 작품 오른쪽 위 아이콘으로 복사할 수 있어요.")
+            for rank, sid, v in others:
+                s = room["stories"][sid]
+                mine = " (내 작품)" if s["author"] == dev else ""
+                with st.container(border=True):
+                    st.markdown(f"**{rank}위 · {story_label(room, sid)}**{mine} · {s['genre']} · {v}표")
+                    st.code(s["text"], language=None, wrap_lines=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -925,7 +959,9 @@ def main():
         if room is None:
             st.session_state.pop("room_code", None)
             store.last_room.pop(dev, None)
-            st.warning("방을 찾을 수 없어요" if status == "missing" else "만료된 방이에요")
+            st.warning({"missing": "방을 찾을 수 없어요",
+                        "expired": "만료된 방이에요",
+                        "host_left": "방장이 방을 나가서 방이 닫혔어요"}.get(status, "방을 찾을 수 없어요"))
             view_home(dev)
         else:
             st.session_state["room_code"] = code
