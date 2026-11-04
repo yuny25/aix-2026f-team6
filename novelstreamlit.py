@@ -49,10 +49,8 @@ CODE_RETRY = 5
 MIN_CHARS, MAX_CHARS = 20, 150          # 입력 글자수 (공백 포함)
 STORY_MIN, STORY_MAX = 450, 550         # 출력 글자수 (공백 포함)
 
-DEFAULT_VOTE_HOURS = 12                 # 10장 3번 가정
-#VOTE_HOURS_OPTIONS = (10, 12)           # FR-11 (Could)
-#SHOW_VOTE_HOURS_SELECT = os.getenv("SHOW_VOTE_HOURS_SELECT", "0") == "1"  # MVP: 숨김
 MIN_VOTE_MINUTES = 5
+DEFAULT_VOTE_MINUTES = MIN_VOTE_MINUTES + 1
 # 개발 중 빠른 테스트용: 투표 시간을 '분' 단위로 덮어씀 (prod 에서는 무시)
 VOTE_MINUTES_DEBUG = os.getenv("VOTE_MINUTES_DEBUG")
 
@@ -660,7 +658,7 @@ def live_panel(code: str, dev: str, shown_phase: str):
     
     dk = f"end_default_{code}"  # 전원 제출된 시점 기준 기본값(12시간 뒤)
     if dk not in st.session_state:
-        st.session_state[dk] = datetime.fromtimestamp(now() + DEFAULT_VOTE_HOURS * 3600, TZ)
+        st.session_state[dk] = datetime.fromtimestamp(now() + DEFAULT_VOTE_MINUTES * 60, TZ)
     d0 = st.session_state[dk]
     today = datetime.now(TZ).date()
 
@@ -677,13 +675,16 @@ def live_panel(code: str, dev: str, shown_phase: str):
         hour12 = st.selectbox("시", list(range(1, 13)), index=(d0.hour % 12 or 12) - 1,
                               key=f"end_hour_{code}")
     with c3:
-        minute = st.selectbox("분", list(range(0, 60, 5)), index=d0.minute // 5,
+        minute = st.selectbox("분", list(range(60)), index=d0.minute,
                               format_func=lambda m: f"{m:02d}", key=f"end_min_{code}")
     hour24 = hour12 % 12 + (12 if ampm == "오후" else 0)
     end_at = datetime.combine(end_date, dtime(hour24, minute), tzinfo=TZ).timestamp()
     st.caption(f"투표는 {fmt_time(end_at)}(한국 시간)에 끝나요.")
+    too_soon = end_at < now() + MIN_VOTE_MINUTES * 60
+    if too_soon:
+        st.warning(f"종료 시각은 지금부터 {MIN_VOTE_MINUTES}분 뒤 이후로 정해 주세요")
 
-    if st.button("투표 시작", type="primary", key=f"start_{code}",
+    if st.button("투표 시작", type="primary", key=f"start_{code}", disabled=too_soon,
                  use_container_width=True, help="입력을 마감하고 익명 투표를 시작해요"):
         ok, msg = start_vote(room, dev, end_at)
         if ok:
@@ -883,29 +884,38 @@ def view_closed(code: str, room: dict, dev: str):
             st.info("투표가 없어 결과가 없어요")
         return
 
-    st.subheader("📊 전체 순위")
-    for rank, sid, v in ranking(room):
-        mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
-        mark = " 🏆" if sid in winners else ""
-        st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
+    others = [(rank, sid, v) for rank, sid, v in ranking(room) if sid not in winners]
+    if others:
+        tab_result, tab_others = st.tabs(["🏆 결과", f"📚 나머지 소설 ({len(others)})"])
+    else:
+        tab_result, tab_others = st.container(), None
 
-    st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
-    for sid in winners:
-        s = room["stories"][sid]
-        with st.container(border=True):
-            st.markdown(f"{s['genre']} · **{top}표**")
-            st.code(s["text"], language=None, wrap_lines=True)
-            if s["author"] == dev:
-                st.caption("🎉 내가 쓴 작품이에요!")
-    illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
-    st.subheader("📚 전체 소설 목록")
-    st.caption("각 작품 오른쪽 위 아이콘으로 복사할 수 있어요.")
-    for rank, sid, v in ranking(room):
-        s = room["stories"][sid]
-        mine = " (내 작품)" if s["author"] == dev else ""
-        with st.container(border=True):
-            st.markdown(f"**{rank}위 · {story_label(room, sid)}**{mine} · {s['genre']} · {v}표")
-            st.code(s["text"], language=None, wrap_lines=True)
+    with tab_result:
+        st.subheader("📊 전체 순위")
+        for rank, sid, v in ranking(room):
+            mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
+            mark = " 🏆" if sid in winners else ""
+            st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
+
+        st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
+        for sid in winners:
+            s = room["stories"][sid]
+            with st.container(border=True):
+                st.markdown(f"{s['genre']} · **{top}표**")
+                st.code(s["text"], language=None, wrap_lines=True)
+                if s["author"] == dev:
+                    st.caption("🎉 내가 쓴 작품이에요!")
+        illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
+
+    if tab_others is not None:
+        with tab_others:
+            st.caption("1등을 뺀 나머지 소설이에요. 각 작품 오른쪽 위 아이콘으로 복사할 수 있어요.")
+            for rank, sid, v in others:
+                s = room["stories"][sid]
+                mine = " (내 작품)" if s["author"] == dev else ""
+                with st.container(border=True):
+                    st.markdown(f"**{rank}위 · {story_label(room, sid)}**{mine} · {s['genre']} · {v}표")
+                    st.code(s["text"], language=None, wrap_lines=True)
 
 
 # ─────────────────────────────────────────────────────────────
