@@ -14,10 +14,10 @@
 수업 시작 후 10분 안에 확인합니다. 체크되지 않은 항목이 있으면 그것부터 해결하고 개발을 시작합니다.
 *Check within the first 10 minutes. Fix any unchecked item before you start coding.*
 
-- [v] 초기 파일이 저장소에 올라와 있다 / Initial files are in the repository
-- [v] 7주차 이슈가 GitHub에 등록되어 있고 담당자가 지정되어 있다 / Week 7 issues are on GitHub with owners
+- [x] 초기 파일이 저장소에 올라와 있다 / Initial files are in the repository
+- [x] 7주차 이슈가 GitHub에 등록되어 있고 담당자가 지정되어 있다 / Week 7 issues are on GitHub with owners
 - [x] 팀원 모두 같은 환경에서 실행된다 / Everyone can run it in the same environment
-- [v] 브랜치 규칙을 정했다 / Branch rule agreed — 
+- [x] 브랜치 규칙을 정했다 / Branch rule agreed — 
 
 ---
 
@@ -56,7 +56,7 @@
 
 ## ④ 오늘 진행한 것 / Progress today
 
-- [v] 이번 활동에서 AI를 사용했다면 `PROMPTS.md`에 기록했습니다 / Logged any AI use in `PROMPTS.md`
+- [x] 이번 활동에서 AI를 사용했다면 `PROMPTS.md`에 기록했습니다 / Logged any AI use in `PROMPTS.md`
 
 ---
 
