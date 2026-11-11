@@ -2,8 +2,8 @@
 
 **중간 데모와 상호 리뷰 / Interim demo and peer review**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
+- 작성일 / Date: 11/11
+- 참여자 / Present: 장윤영, 김현승, 이다현, 박정하
 - 결과보고서 / Report chapter: 8장 결과와 한계
 - 최종 반영 / Feeds into: 협업 평가 근거 / collaboration evidence
 
