@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ─────────────────────────────────────────────────────────────
 # 설정값 (명세의 "설정 데이터로 관리" 원칙: 숫자·문구는 모두 여기서 변경)
@@ -104,6 +105,8 @@ ILLUST_STYLES: dict[str, str] = {
 PHASE_LABEL = {"input": "✏️ 일상 쓰는 중", "vote": "🗳️ 투표 중", "closed": "🏁 종료"}
 
 MSG_AI_OFF = "지금은 소설을 만들 수 없어요"
+
+COOKIE_NAME = "dayfic_d"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -561,14 +564,31 @@ def md_safe(text: str) -> str:
     """소설 본문을 마크다운으로 그릴 때 깨지는 문자 이스케이프 + 문단 유지."""
     return text.replace("$", r"\$").replace("~", r"\~").replace("\n", "\n\n")
 
+def _read_cookie():
+    """브라우저에 저장된 기기 ID 쿠키를 읽는다(Streamlit 1.37 이상)."""
+    try:
+        return st.context.cookies.get(COOKIE_NAME)
+    except Exception:
+        return None
 
 def init_identity() -> str:
-    """로그인 없음: 기기ID(랜덤)로만 구분. 새로고침해도 유지되도록 URL 쿼리에 둔다."""
-    d = st.query_params.get("d")
-    if not d or not re.fullmatch(r"[0-9a-f]{32}", d):
-        d = uuid.uuid4().hex
-        st.query_params["d"] = d
-    st.session_state["dev"] = d
+    """로그인 없음: 기기ID(랜덤)로만 구분. 주소(URL)가 아니라 브라우저 쿠키에 저장한다.
+    -> 주소를 통째로 공유해도 다른 사람이 같은 사람으로 인식되지 않는다."""
+    d = st.session_state.get("dev")
+    if not d:
+        c = _read_cookie()
+        if c and re.fullmatch(r"[0-9a-f]{32}", c):
+            d, is_new = c, False
+        else:
+            d, is_new = uuid.uuid4().hex, True
+        st.session_state["dev"] = d
+        st.session_state["dev_new"] = is_new
+    if st.session_state.get("dev_new"):  # 쿠키가 없으면 브라우저에 저장(새로고침해도 유지)
+        components.html(
+            f"<script>window.parent.document.cookie="
+            f"'{COOKIE_NAME}={d}; path=/; max-age={ROOM_TTL_DAYS * 86400}; SameSite=Lax';</script>",
+            height=0,
+        )
     return d
 
 
@@ -975,7 +995,7 @@ main()
 # ─────────────────────────────────────────────────────────────
 # NOTES
 # - 익명성은 "화면 수준"입니다(6장). 작성자 기기ID는 서버 메모리에만 있고 화면에는 나가지 않습니다.
-# - 기기ID는 URL(?d=...)에 보관됩니다. 주소창 URL을 다른 사람에게 공유하면 같은 사람으로
+# - 기기ID는 브라우저 쿠키(dayfic_d)에 보관됩니다. 주소창 URL을 다른 사람에게 공유하면 같은 사람으로
 #   인식되므로, 공유는 반드시 '방 코드'로만 하세요.
 # - 방장 기기를 잃으면 복구하지 않습니다(MVP).
 # - 일상 원문은 서버에 저장하지 않고, 변환 요청 시점에만 AI로 전달됩니다.
