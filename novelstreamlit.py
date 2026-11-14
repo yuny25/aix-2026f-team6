@@ -867,23 +867,29 @@ MODE_CSS = """
 
 ALERT_CSS = """
 [data-testid="stAlert"] { background: transparent !important; }
-[data-testid="stAlert"] [data-baseweb="notification"] {
+[data-testid="stAlert"] > div, [data-testid="stAlertContainer"],
+[data-testid="stAlert"] [role="alert"], [data-testid="stAlert"] [data-baseweb="notification"] {
     background-color: rgba(167,139,250,.16) !important;
+    background-image: none !important;
     border: 1px solid var(--card-border) !important; border-radius: 14px !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) [data-baseweb="notification"] {
+[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) > div,
+[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) [data-testid="stAlertContainer"] {
     background-color: rgba(80,150,255,.16) !important; border-color: rgba(80,150,255,.35) !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-baseweb="notification"] {
+[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) > div,
+[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stAlertContainer"] {
     background-color: rgba(60,200,120,.16) !important; border-color: rgba(60,200,120,.35) !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) [data-baseweb="notification"] {
+[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) > div,
+[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) [data-testid="stAlertContainer"] {
     background-color: rgba(255,190,40,.18) !important; border-color: rgba(255,190,40,.40) !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-baseweb="notification"] {
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) > div,
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stAlertContainer"] {
     background-color: rgba(255,90,90,.16) !important; border-color: rgba(255,90,90,.35) !important;
 }
-[data-testid="stAlert"] p, [data-testid="stAlert"] div { color: var(--text) !important; }
+[data-testid="stAlert"] p, [data-testid="stAlert"] div, [data-testid="stAlert"] span { color: var(--text) !important; }
 """
 
 
