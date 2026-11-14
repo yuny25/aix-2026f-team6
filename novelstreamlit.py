@@ -869,27 +869,126 @@ ALERT_CSS = """
 [data-testid="stAlert"] { background: transparent !important; }
 [data-testid="stAlert"] > div, [data-testid="stAlertContainer"],
 [data-testid="stAlert"] [role="alert"], [data-testid="stAlert"] [data-baseweb="notification"] {
-    background-color: rgba(167,139,250,.16) !important;
+    background-color: rgba(124,92,255,.18) !important;   /* 상자 바탕 */
     background-image: none !important;
-    border: 1px solid var(--card-border) !important; border-radius: 14px !important;
+    border: 1px solid rgba(167,139,250,.45) !important;   /* 테두리 */
+    border-radius: 14px !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) > div,
-[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) [data-testid="stAlertContainer"] {
-    background-color: rgba(80,150,255,.16) !important; border-color: rgba(80,150,255,.35) !important;
+[data-testid="stAlert"] p, [data-testid="stAlert"] div, [data-testid="stAlert"] span {
+    color: var(--text) !important;                        /* 상자 글자 */
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) > div,
-[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stAlertContainer"] {
-    background-color: rgba(60,200,120,.16) !important; border-color: rgba(60,200,120,.35) !important;
+
+/* 설명 글씨(캡션) */
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] * {
+    color: var(--text-dim) !important;
+    opacity: 1 !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) > div,
-[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) [data-testid="stAlertContainer"] {
-    background-color: rgba(255,190,40,.18) !important; border-color: rgba(255,190,40,.40) !important;
+
+/* 버튼: 모양은 그대로, 글씨만 또렷하게 */
+.stButton > button p, [data-testid^="stBaseButton"] p {
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
 }
-[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) > div,
-[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stAlertContainer"] {
-    background-color: rgba(255,90,90,.16) !important; border-color: rgba(255,90,90,.35) !important;
+[data-testid="stBaseButton-primary"] p {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,.25);
 }
-[data-testid="stAlert"] p, [data-testid="stAlert"] div, [data-testid="stAlert"] span { color: var(--text) !important; }
+[data-testid^="stBaseButton"]:disabled,
+[data-testid^="stBaseButton"]:disabled p,
+[data-testid^="stBaseButton"]:disabled span {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    opacity: 1 !important;
+}
+
+/* 날짜 입력칸: 안쪽 전부 */
+[data-testid="stDateInput"] *,
+[data-testid="stDateInput"] input,
+[data-testid="stDateInput"] input::placeholder {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    opacity: 1 !important;
+    caret-color: var(--text) !important;
+}
+[data-testid="stDateInput"] input { background-color: transparent !important; }
+
+/* 바깥 칸에만 테두리, 안쪽 칸은 투명 */
+[data-testid="stDateInput"] [data-baseweb="input"] {
+    background-color: var(--field) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+[data-testid="stDateInput"] [data-baseweb="base-input"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 라벨 뒤 하얀 띠 제거 */
+[data-testid="stDateInput"] label,
+[data-testid="stDateInput"] [data-testid="stWidgetLabel"],
+[data-testid="stDateInput"] [data-testid="stWidgetLabel"] * {
+    background: transparent !important;
+}
+[data-testid="stDateInput"] svg { fill: var(--text) !important; color: var(--text) !important; opacity: 1 !important; }
+
+/* 달력 팝업 */
+[data-baseweb="popover"] [data-baseweb="calendar"],
+[data-baseweb="calendar"] * {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="calendar"] [aria-selected="true"],
+[data-baseweb="calendar"] [aria-selected="true"] * {
+    background: linear-gradient(135deg, #6d5cff, #a95bff) !important;
+    color: #ffffff !important;
+}
+
+/* 드롭다운 목록(오전/오후, 시, 분) */
+[data-baseweb="popover"] ul, [data-baseweb="menu"] {
+    background-color: var(--field) !important;
+}
+[data-baseweb="popover"] li, [data-baseweb="menu"] li {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="popover"] li:hover, [data-baseweb="menu"] li:hover {
+    background-color: rgba(124,92,255,.30) !important;
+}
+
+/* 투표 시간 선택 칸 */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background-color: var(--field) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 12px !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] > div > div {
+    background-color: transparent !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] span {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+}
+
+[data-testid="stSelectbox"] svg {
+    color: var(--text) !important;
+    fill: var(--text) !important;
+}
+
+/* 드롭다운 목록 */
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] [role="option"] {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+
+[data-baseweb="popover"] [role="option"]:hover {
+    background-color: rgba(124,92,255,.30) !important;
+}
 """
 
 
@@ -906,7 +1005,6 @@ def apply_theme():
         vars_css = (":root{" + light + "} "
                     "@media (prefers-color-scheme: dark){:root{" + dark + "}}")
     st.markdown(THEME_CSS, unsafe_allow_html=True)
-    st.markdown("<style>" + vars_css + HERO_CSS + MODE_CSS + "</style>", unsafe_allow_html=True)
     st.markdown(EXTRA_CSS, unsafe_allow_html=True)
     st.markdown("<style>" + vars_css + HERO_CSS + MODE_CSS + ALERT_CSS + "</style>", unsafe_allow_html=True)
 
