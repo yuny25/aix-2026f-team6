@@ -865,6 +865,27 @@ MODE_CSS = """
 .st-key-ui_mode label:has(input:checked) [data-testid="stMarkdownContainer"] p { color: #fff !important; }
 """
 
+ALERT_CSS = """
+[data-testid="stAlert"] { background: transparent !important; }
+[data-testid="stAlert"] [data-baseweb="notification"] {
+    background-color: rgba(167,139,250,.16) !important;
+    border: 1px solid var(--card-border) !important; border-radius: 14px !important;
+}
+[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) [data-baseweb="notification"] {
+    background-color: rgba(80,150,255,.16) !important; border-color: rgba(80,150,255,.35) !important;
+}
+[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-baseweb="notification"] {
+    background-color: rgba(60,200,120,.16) !important; border-color: rgba(60,200,120,.35) !important;
+}
+[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) [data-baseweb="notification"] {
+    background-color: rgba(255,190,40,.18) !important; border-color: rgba(255,190,40,.40) !important;
+}
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-baseweb="notification"] {
+    background-color: rgba(255,90,90,.16) !important; border-color: rgba(255,90,90,.35) !important;
+}
+[data-testid="stAlert"] p, [data-testid="stAlert"] div { color: var(--text) !important; }
+"""
+
 
 def apply_theme():
     """기본('자동')은 사용 중인 기기·브라우저의 밝게/어둡게 설정을 따른다. 직접 고르면 그 값을 쓴다."""
@@ -881,6 +902,7 @@ def apply_theme():
     st.markdown(THEME_CSS, unsafe_allow_html=True)
     st.markdown("<style>" + vars_css + HERO_CSS + MODE_CSS + "</style>", unsafe_allow_html=True)
     st.markdown(EXTRA_CSS, unsafe_allow_html=True)
+    st.markdown("<style>" + vars_css + HERO_CSS + MODE_CSS + ALERT_CSS + "</style>", unsafe_allow_html=True)
 
 
 def mode_toggle():
