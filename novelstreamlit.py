@@ -37,6 +37,9 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
+import base64
+from pathlib import Path
+
 # ─────────────────────────────────────────────────────────────
 # 설정값 (명세의 "설정 데이터로 관리" 원칙: 숫자·문구는 모두 여기서 변경)
 # ─────────────────────────────────────────────────────────────
@@ -64,7 +67,7 @@ POLL_SEC = 5                            # 다른 참여자 변화 확인 주기
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 # 모델명은 개발 단계에서 비교 후 정하기로 했으므로 환경 변수로 교체 가능
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite")
-IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
 
 GENRES = {
     "현대판타지": "현대 한국에 던전과 각성자가 존재한다. 헌터, 길드, 게이트, 스킬 창 같은 용어를 쓴다.",
@@ -107,6 +110,8 @@ PHASE_LABEL = {"input": "✏️ 일상 쓰는 중", "vote": "🗳️ 투표 중"
 MSG_AI_OFF = "지금은 소설을 만들 수 없어요"
 
 COOKIE_NAME = "dayfic_d"
+
+ASSET_DIR = Path(__file__).parent / "assets"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -609,41 +614,468 @@ def leave_room(dev: str):
     for k in [k for k in st.session_state if k.startswith(("genre_", "text_"))]:
         st.session_state.pop(k, None)
     st.rerun()
+# ─────────────────────────────────────────────────────────────
+# 디자인 (기능과 무관: 색, 모양, 홈 화면 상단만 담당)
+# ─────────────────────────────────────────────────────────────
+THEME_CSS = """
+<style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;800&display=swap');
 
+html, body, [class*="css"], .stApp { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; }
+.stApp {
+    background:
+        radial-gradient(900px 500px at 75% -5%, var(--glow-1), transparent 60%),
+        radial-gradient(700px 500px at 5% 15%, var(--glow-2), transparent 60%),
+        var(--bg-base);
+}
+header[data-testid="stHeader"] { background: transparent; }
+.block-container, [data-testid="stMainBlockContainer"] {
+    max-width: 980px !important; padding-top: 2rem !important;
+}
+@media (max-width: 640px) {
+    .block-container, [data-testid="stMainBlockContainer"] {
+        max-width: 100% !important; padding: 1rem .8rem 3rem .8rem !important;
+    }
+}
+
+/* 글자색: Streamlit 기본 테마와 상관없이 우리가 고른 모드의 색을 따른다 */
+.stApp [data-testid="stMarkdownContainer"] p, .stApp [data-testid="stMarkdownContainer"] li,
+.stApp [data-testid="stMarkdownContainer"] h1, .stApp [data-testid="stMarkdownContainer"] h2,
+.stApp [data-testid="stMarkdownContainer"] h3, .stApp [data-testid="stMarkdownContainer"] h4,
+.stApp [data-testid="stWidgetLabel"] p, .stApp [data-testid="stWidgetLabel"] label,
+.stApp [data-testid="stHeadingWithActionElements"] { color: var(--text) !important; }
+.stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] p { color: var(--text-dim) !important; }
+.stApp button [data-testid="stMarkdownContainer"] p { color: inherit !important; }
+.stTextInput input, .stTextArea textarea, .stDateInput input,
+[data-baseweb="select"] div, [data-baseweb="select"] span { color: var(--text) !important; }
+.stTextInput input::placeholder, .stTextArea textarea::placeholder { color: var(--text-dim) !important; opacity: .8; }
+
+/* 상단(히어로) */
+.hero { position: relative; text-align: center; padding: 1.6rem 0 1.2rem 0; overflow: hidden; }
+.hero-book { font-size: 4.2rem; filter: drop-shadow(0 0 28px rgba(167,120,255,.9)); line-height: 1; }
+.hero-title {
+    font-family: 'Noto Serif KR', Georgia, serif; font-weight: 800;
+    font-size: clamp(2.8rem, 9vw, 4.4rem); letter-spacing: .01em; line-height: 1.1;
+    background: var(--title-grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero-title span { font-size: .45em; vertical-align: super; color: var(--title-star); -webkit-text-fill-color: var(--title-star); margin-left: .15em; }
+.hero-tag {
+    font-family: 'Noto Serif KR', Georgia, serif; font-weight: 600;
+    font-size: clamp(1.15rem, 3.6vw, 1.7rem); line-height: 1.45; margin-top: .6rem; color: var(--text);
+}
+.hero-sub { margin-top: .8rem; font-size: .95rem; line-height: 1.6; color: var(--text-dim); }
+.brand { font-size: 1.4rem; font-weight: 800; color: var(--text); padding: .2rem 0 .6rem 0; }
+
+/* 탭 */
+.stTabs [data-baseweb="tab-list"] {
+    display: flex; width: 100%; gap: 6px; padding: 6px;
+    background: var(--tab-bg); border-radius: 16px; border: 0;
+}
+.stTabs [data-baseweb="tab"] {
+    flex: 1 1 0; min-width: 0; height: 48px; margin: 0; padding: 0 1rem;
+    border-radius: 12px; color: var(--tab-text);
+    justify-content: center; font-weight: 700; font-size: 1rem;
+}
+.stTabs [data-baseweb="tab"] p { font-size: 1rem; font-weight: 700; }
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(90deg, #7c5cff, #a46bff); color: #fff !important;
+    box-shadow: 0 4px 16px var(--shadow);
+}
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
+
+/* 버튼 */
+.stButton > button[kind="primary"], button[data-testid="stBaseButton-primary"],
+[data-testid="stFormSubmitButton"] > button {
+    background: linear-gradient(90deg, #6d5cff 0%, #a95bff 55%, #ff5fc4 100%);
+    color: #fff; border: 0; border-radius: 14px; font-weight: 700; min-height: 3rem;
+    box-shadow: 0 6px 22px var(--shadow);
+}
+.stButton > button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] > button:hover { filter: brightness(1.08); color: #fff; }
+.stButton > button[kind="secondary"], button[data-testid="stBaseButton-secondary"] {
+    background: var(--btn2-bg); color: var(--btn2-text); border: 1px solid var(--btn2-border); border-radius: 12px;
+}
+
+/* 카드, 입력, 알림 */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 18px; border: 1px solid var(--card-border); background: var(--card);
+}
+.stTextInput [data-baseweb="input"], .stTextInput [data-baseweb="base-input"],
+.stTextArea [data-baseweb="textarea"], .stTextArea [data-baseweb="base-input"],
+.stDateInput [data-baseweb="input"], .stDateInput [data-baseweb="base-input"],
+[data-baseweb="select"] > div {
+    background: var(--field) !important; border-radius: 12px !important;
+    border: 1px solid var(--card-border) !important;
+}
+.stTextInput input, .stTextArea textarea, .stDateInput input {
+    background: transparent !important; color: var(--text) !important;
+}
+[data-testid="stCode"] pre, [data-testid="stCode"] code, .stCode pre {
+    background: var(--field) !important; color: var(--text) !important; border-radius: 12px;
+}
+[data-testid="stAlert"] { border-radius: 14px; }
+
+
+/* 홈: 예시 카드 */
+.ex-card {
+    border-radius: 18px; border: 1px solid var(--card-border);
+    background: var(--card); padding: 1.1rem 1.2rem;
+}
+.ex-title { font-weight: 800; margin-bottom: .8rem; color: var(--text); }
+.ex-item { margin-bottom: .9rem; }
+.ex-chip {
+    display: inline-block; font-size: .72rem; font-weight: 700; padding: .12rem .6rem;
+    border-radius: 999px; background: linear-gradient(90deg, #7c5cff, #c25bff); color: #fff;
+}
+.ex-item p { margin: .35rem 0 0 0; color: var(--text-dim); }
+</style>
+"""
+
+EXAMPLES = [
+    ("현대판타지", "“퇴근길 지하철에 게이트가 열렸다.”"),
+    ("무협", "“객잔 주인이 사실은 전설의 검객이었다.”"),
+    ("로맨스판타지", "“다시 시작된 황제의 프러포즈.”"),
+]
+
+
+LIGHT_VARS = (
+    "--bg-base:#f6f3ff; --glow-1:rgba(170,140,255,.50); --glow-2:rgba(130,190,255,.40);"
+    "--text:#2a1a5e; --text-dim:#5b4b8a; --card:rgba(255,255,255,.72);"
+    "--card-border:rgba(124,92,255,.22); --field:#ffffff; --tab-bg:rgba(124,92,255,.10);"
+    "--tab-text:#5b4b8a; --title-grad:linear-gradient(180deg,#4b2bb8 10%,#8a63ff 100%);"
+    "--title-star:#7c5cff; --btn2-bg:#ffffff; --btn2-text:#4b2bb8;"
+    "--btn2-border:rgba(124,92,255,.35); --shadow:rgba(124,92,255,.28);"
+)
+DARK_VARS = (
+    "--bg-base:#0c0720; --glow-1:rgba(139,92,246,.38); --glow-2:rgba(99,60,200,.30);"
+    "--text:#f1ecff; --text-dim:#cfc4ee; --card:rgba(28,18,58,.55);"
+    "--card-border:rgba(167,139,250,.28); --field:#1b1238; --tab-bg:rgba(255,255,255,.05);"
+    "--tab-text:#cfc4ee; --title-grad:linear-gradient(180deg,#ffffff 20%,#cdb8ff 100%);"
+    "--title-star:#c4a6ff; --btn2-bg:rgba(255,255,255,.05); --btn2-text:#eae3ff;"
+    "--btn2-border:rgba(167,139,250,.35); --shadow:rgba(150,90,255,.40);"
+)
+
+
+MODE_AUTO, MODE_LIGHT, MODE_DARK = "자동", "밝게", "어둡게"
+MODE_LABELS = [MODE_AUTO, MODE_LIGHT, MODE_DARK]
+
+EXTRA_CSS = """
+<style>
+/* 입력 칸: 바깥 틀과 안쪽을 모두 우리 색으로 */
+[data-testid="stTextArea"] div, [data-testid="stTextInput"] div,
+[data-testid="stDateInput"] div, .stTextArea [data-baseweb], .stTextInput [data-baseweb],
+.stDateInput [data-baseweb] {
+    background-color: var(--field) !important;
+}
+[data-testid="stTextArea"] [data-baseweb="textarea"], [data-testid="stTextInput"] [data-baseweb="input"],
+[data-testid="stDateInput"] [data-baseweb="input"] {
+    border: 1px solid var(--card-border) !important; border-radius: 12px !important;
+}
+[data-testid="stTextArea"] textarea, [data-testid="stTextInput"] input, [data-testid="stDateInput"] input {
+    background-color: transparent !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    caret-color: var(--text) !important;
+}
+[data-testid="stTextArea"] textarea::placeholder, [data-testid="stTextInput"] input::placeholder {
+    color: var(--text-dim) !important; -webkit-text-fill-color: var(--text-dim) !important; opacity: .8;
+}
+
+/* 코드 상자(방 코드, 소설 카드) */
+[data-testid="stCode"], [data-testid="stCode"] pre, [data-testid="stCode"] code {
+    background-color: var(--field) !important; color: var(--text) !important; border-radius: 12px;
+}
+
+/* 탭: 줄 전체를 반반 나눠 쓰는 큰 알약 모양 */
+.stTabs [data-baseweb="tabs"] { width: 100% !important; }
+.stTabs [role="tablist"] {
+    display: flex !important; width: 100% !important; gap: 6px !important; padding: 6px !important;
+    background: var(--tab-bg) !important; border-radius: 16px !important; border: 0 !important;
+}
+.stTabs [role="tab"] {
+    flex: 1 1 0 !important; min-width: 0 !important; height: 48px !important; margin: 0 !important;
+    padding: 0 1rem !important; border-radius: 12px !important; justify-content: center !important;
+    color: var(--tab-text) !important; font-weight: 700 !important;
+}
+.stTabs [role="tab"] p { font-size: 1rem !important; font-weight: 700 !important; color: inherit !important; }
+.stTabs [role="tab"][aria-selected="true"] {
+    background: linear-gradient(90deg, #7c5cff, #a46bff) !important; color: #fff !important;
+    box-shadow: 0 4px 16px var(--shadow);
+}
+</style>
+"""
+
+@st.cache_data
+def img_uri(name: str) -> str:
+    """assets 폴더의 이미지를 화면에 바로 넣을 수 있는 주소(base64)로 바꾼다."""
+    p = ASSET_DIR / name
+    if not p.exists():
+        return ""
+    return "data:image/jpeg;base64," + base64.b64encode(p.read_bytes()).decode()
+
+
+def hero_var(name: str) -> str:
+    u = img_uri(name)
+    return f'--hero-img:url("{u}");' if u else "--hero-img:none;"
+
+
+HERO_CSS = """
+.hero { position: relative; overflow: visible !important; text-align: left !important;
+        padding: clamp(40px, 7vw, 70px) 4px clamp(24px, 4vw, 40px) 4px !important; }
+.hero-banner {
+    position: absolute; top: -30px; bottom: 0; left: 26%; right: -3%; height: auto;
+    margin: 0; border: 0; border-radius: 0; box-shadow: none; z-index: 0; pointer-events: none;
+    background-image: var(--hero-img); background-size: cover; background-position: 66% center;
+    -webkit-mask-image:
+        linear-gradient(to bottom, transparent 0%, #000 18%, #000 60%, transparent 100%),
+        linear-gradient(to right, transparent 0%, #000 34%, #000 88%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+        linear-gradient(to bottom, transparent 0%, #000 18%, #000 60%, transparent 100%),
+        linear-gradient(to right, transparent 0%, #000 34%, #000 88%, transparent 100%);
+    mask-composite: intersect;
+}
+.hero > *:not(.hero-banner) { position: relative; z-index: 1; text-shadow: 0 2px 20px var(--bg-base); }
+.hero-title, .hero-tag, .hero-sub { text-align: left !important; }
+.hero-tag, .hero-sub { max-width: 54%; }
+@media (max-width: 640px) {
+    .hero-banner { left: 0; right: 0; opacity: .5; }
+    .hero-tag, .hero-sub { max-width: 100%; }
+}
+"""
+
+MODE_CSS = """
+.st-key-ui_mode { display: flex; justify-content: flex-end; }
+.st-key-ui_mode [role="radiogroup"] {
+    display: inline-flex !important; flex-direction: row !important; gap: 2px !important;
+    padding: 4px !important; width: auto;
+    background: var(--tab-bg); border: 1px solid var(--card-border); border-radius: 999px;
+}
+.st-key-ui_mode label { margin: 0 !important; padding: .28rem .95rem !important;
+                        border-radius: 999px; cursor: pointer; }
+.st-key-ui_mode label > div:first-child { display: none !important; }
+.st-key-ui_mode label [data-testid="stMarkdownContainer"] p {
+    font-size: .85rem; font-weight: 600; margin: 0;
+}
+.st-key-ui_mode label:has(input:checked) {
+    background: linear-gradient(90deg, #7c5cff, #a46bff); box-shadow: 0 2px 12px var(--shadow);
+}
+.st-key-ui_mode label:has(input:checked) [data-testid="stMarkdownContainer"] p { color: #fff !important; }
+"""
+
+ALERT_CSS = """
+[data-testid="stAlert"] { background: transparent !important; }
+[data-testid="stAlert"] > div, [data-testid="stAlertContainer"],
+[data-testid="stAlert"] [role="alert"], [data-testid="stAlert"] [data-baseweb="notification"] {
+    background-color: rgba(124,92,255,.18) !important;   /* 상자 바탕 */
+    background-image: none !important;
+    border: 1px solid rgba(167,139,250,.45) !important;   /* 테두리 */
+    border-radius: 14px !important;
+}
+[data-testid="stAlert"] p, [data-testid="stAlert"] div, [data-testid="stAlert"] span {
+    color: var(--text) !important;                        /* 상자 글자 */
+}
+
+/* 설명 글씨(캡션) */
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] * {
+    color: var(--text-dim) !important;
+    opacity: 1 !important;
+}
+
+/* 버튼: 모양은 그대로, 글씨만 또렷하게 */
+.stButton > button p, [data-testid^="stBaseButton"] p {
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0 !important;
+}
+[data-testid="stBaseButton-primary"] p {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+[data-testid^="stBaseButton"]:disabled,
+[data-testid^="stBaseButton"]:disabled p,
+[data-testid^="stBaseButton"]:disabled span {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    opacity: 1 !important;
+}
+
+/* 날짜 입력칸: 안쪽 전부 */
+[data-testid="stDateInput"] *,
+[data-testid="stDateInput"] input,
+[data-testid="stDateInput"] input::placeholder {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+    opacity: 1 !important;
+    caret-color: var(--text) !important;
+}
+[data-testid="stDateInput"] input { background-color: transparent !important; }
+
+/* 바깥 칸에만 테두리, 안쪽 칸은 투명 */
+[data-testid="stDateInput"] [data-baseweb="input"] {
+    background-color: var(--field) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+[data-testid="stDateInput"] [data-baseweb="base-input"] {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 라벨 뒤 하얀 띠 제거 */
+[data-testid="stDateInput"] label,
+[data-testid="stDateInput"] [data-testid="stWidgetLabel"],
+[data-testid="stDateInput"] [data-testid="stWidgetLabel"] * {
+    background: transparent !important;
+}
+[data-testid="stDateInput"] svg { fill: var(--text) !important; color: var(--text) !important; opacity: 1 !important; }
+
+/* 달력 팝업 */
+[data-baseweb="popover"] [data-baseweb="calendar"],
+[data-baseweb="calendar"] * {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="calendar"] [aria-selected="true"],
+[data-baseweb="calendar"] [aria-selected="true"] * {
+    background: linear-gradient(135deg, #6d5cff, #a95bff) !important;
+    color: #ffffff !important;
+}
+
+/* 드롭다운 목록(오전/오후, 시, 분) */
+[data-baseweb="popover"] ul, [data-baseweb="menu"] {
+    background-color: var(--field) !important;
+}
+[data-baseweb="popover"] li, [data-baseweb="menu"] li {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="popover"] li:hover, [data-baseweb="menu"] li:hover {
+    background-color: rgba(124,92,255,.30) !important;
+}
+
+/* 투표 시간 선택 칸 */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background-color: var(--field) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 12px !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] > div > div {
+    background-color: transparent !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] span {
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text) !important;
+}
+
+[data-testid="stSelectbox"] svg {
+    color: var(--text) !important;
+    fill: var(--text) !important;
+}
+
+/* 드롭다운 목록 */
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] [role="option"] {
+    background-color: var(--field) !important;
+    color: var(--text) !important;
+}
+
+[data-baseweb="popover"] [role="option"]:hover {
+    background-color: rgba(124,92,255,.30) !important;
+}
+"""
+
+
+def apply_theme():
+    """기본('자동')은 사용 중인 기기·브라우저의 밝게/어둡게 설정을 따른다. 직접 고르면 그 값을 쓴다."""
+    pick = st.session_state.get("ui_mode", MODE_AUTO)
+    light = LIGHT_VARS + hero_var("hero_light.jpg")
+    dark = DARK_VARS + hero_var("hero_dark.jpg")
+    if pick == MODE_LIGHT:
+        vars_css = ":root{" + light + "}"
+    elif pick == MODE_DARK:
+        vars_css = ":root{" + dark + "}"
+    else:
+        vars_css = (":root{" + light + "} "
+                    "@media (prefers-color-scheme: dark){:root{" + dark + "}}")
+    st.markdown(THEME_CSS, unsafe_allow_html=True)
+    st.markdown(EXTRA_CSS, unsafe_allow_html=True)
+    st.markdown("<style>" + vars_css + HERO_CSS + MODE_CSS + ALERT_CSS + "</style>", unsafe_allow_html=True)
+
+
+def mode_toggle():
+    st.radio("화면 모드", MODE_LABELS, key="ui_mode", horizontal=True,
+             label_visibility="collapsed")
+
+
+def render_hero():
+    st.markdown(
+        '<div class="hero"><div class="hero-banner"></div>'
+        '<div class="hero-title">Dayfic<span>✦</span></div>'
+        '<div class="hero-tag">《AI가 내 인생을<br>멋대로 각색하기 시작했다》</div>'
+        '<div class="hero-sub">지인들과 한 줄의 일상을 쓰면,<br>'
+        'AI가 장르 소설로 바꿔주고, 익명 투표로 1등을 뽑아요.</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_brand():
+    st.markdown('<div class="brand">📖 Dayfic</div>', unsafe_allow_html=True)
+
+
+def render_examples():
+    items = "".join(
+        f'<div class="ex-item"><span class="ex-chip">{g}</span><p>{t}</p></div>' for g, t in EXAMPLES
+    )
+    st.markdown(
+        f'<div class="ex-card"><div class="ex-title">★ 이런 이야기로 가능해요!</div>{items}</div>',
+        unsafe_allow_html=True,
+    )
 
 # ─────────────────────────────────────────────────────────────
 # 홈 (FR-01, FR-02)
 # ─────────────────────────────────────────────────────────────
 def view_home(dev: str):
-    st.caption("오늘의 일상을 한 줄 쓰면, AI가 장르 소설로 바꿔 줘요. 익명으로 돌려 읽고 1등을 뽑아요.")
-    tab_create, tab_join = st.tabs(["방 만들기", "방 입장"])
+    left, right = st.columns([3, 2], gap="large")
+    with left:
+        tab_create, tab_join = st.tabs(["✏️ 방 만들기", "👥 방 입장"])
 
-    with tab_create:
-        st.write("방을 만들면 6자리 코드가 생겨요. 코드를 지인에게 알려 주세요.")
-        st.caption("투표 종료 시각은 모두 제출한 뒤, 투표를 시작할 때 정해요.")
-        if st.button("방 만들기", type="primary", use_container_width=True):
-            code = create_room(dev)
-            if code:
-                st.session_state["room_code"] = code
-                st.rerun()
-            else:
-                st.error("잠시 후 다시 시도해 주세요")
-
-    with tab_join:
-        with st.form("join_form", clear_on_submit=False):
-            raw = st.text_input("방 코드 6자리", max_chars=CODE_LEN, placeholder="예: K7M2QX")
-            go = st.form_submit_button("입장", type="primary", use_container_width=True)
-        if go:
-            code = raw.strip().upper()
-            if len(code) != CODE_LEN:
-                st.warning(f"코드는 {CODE_LEN}자리예요")
-            else:
-                ok, msg = join_room(code, dev)
-                if ok:
+        with tab_create:
+            st.markdown("#### 함께 쓸 이야기의 시작")
+            st.write("방을 만들면 6자리 코드가 생겨요. 코드를 지인에게 알려 주세요.")
+            st.caption("투표 종료 시각은 모두 제출한 뒤, 투표를 시작할 때 정해요.")
+            if st.button("✨ 방 만들기", type="primary", use_container_width=True):
+                code = create_room(dev)
+                if code:
                     st.session_state["room_code"] = code
                     st.rerun()
                 else:
-                    st.error(msg)
+                    st.error("잠시 후 다시 시도해 주세요")
+
+        with tab_join:
+            st.markdown("#### 친구가 만든 방에 들어가기")
+            with st.form("join_form", clear_on_submit=False):
+                raw = st.text_input("방 코드 6자리", max_chars=CODE_LEN, placeholder="예: K7M2QX")
+                go = st.form_submit_button("입장", type="primary", use_container_width=True)
+            if go:
+                code = raw.strip().upper()
+                if len(code) != CODE_LEN:
+                    st.warning(f"코드는 {CODE_LEN}자리예요")
+                else:
+                    ok, msg = join_room(code, dev)
+                    if ok:
+                        st.session_state["room_code"] = code
+                        st.rerun()
+                    else:
+                        st.error(msg)
+    with right:
+        render_examples()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -961,32 +1393,62 @@ def view_room(code: str, room: dict, dev: str):
     else:
         view_closed(code, room, dev)
 
+# ─────────────────────────────────────────────────────────────
+# UI
+# ─────────────────────────────────────────────────────────────
+def apply_layout_css():
+    """화면 폭에 따라 모양을 나눈다: 컴퓨터는 넓게(최대 900px), 폰은 화면 전체 폭."""
+    st.markdown(
+        """
+<style>
+.block-container, [data-testid="stMainBlockContainer"] {
+    max-width: 900px !important;
+    padding-top: 2rem !important;
+}
+@media (max-width: 640px) {
+    .block-container, [data-testid="stMainBlockContainer"] {
+        max-width: 100% !important;
+        padding: 1rem 0.8rem 3rem 0.8rem !important;
+    }
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
 
 # ─────────────────────────────────────────────────────────────
 # 진입점
 # ─────────────────────────────────────────────────────────────
 def main():
     st.set_page_config(page_title="Dayfic", page_icon="📖", layout="centered")
+    apply_theme()
+    mode_toggle() 
     dev = init_identity()
-    st.title("📖 Dayfic")
-    if APP_ENV != "prod":
-        st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
 
     store = get_store()
     code = st.session_state.get("room_code") or store.last_room.get(dev)  # 새로고침 복구
+    room, status = (None, None)
     if code:
         room, status = find_room(code)
         if room is None:
             st.session_state.pop("room_code", None)
             store.last_room.pop(dev, None)
+
+    if room is not None:
+        render_brand()
+        if APP_ENV != "prod":
+            st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
+        st.session_state["room_code"] = code
+        view_room(code, room, dev)
+    else:
+        render_hero()
+        if APP_ENV != "prod":
+            st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
+        if code:
             st.warning({"missing": "방을 찾을 수 없어요",
                         "expired": "만료된 방이에요",
                         "host_left": "방장이 방을 나가서 방이 닫혔어요"}.get(status, "방을 찾을 수 없어요"))
-            view_home(dev)
-        else:
-            st.session_state["room_code"] = code
-            view_room(code, room, dev)
-    else:
         view_home(dev)
 
 
