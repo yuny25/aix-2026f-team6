@@ -80,7 +80,7 @@ GENRES = {
 # 장르별 삽화 그림 방식 (명세 7장). 키는 GENRES와 동일해야 함
 ILLUST_STYLES: dict[str, str] = {
     "현대판타지": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, detailed facial features, "
         "sophisticated lighting and shading, modern urban fantasy atmosphere, "
         "contemporary cityscapes blended with supernatural elements, mystical magical effects, "
@@ -88,7 +88,7 @@ ILLUST_STYLES: dict[str, str] = {
         "cool and vivid color palette, immersive composition, visually striking fantasy aesthetics."
     ),
     "무협": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, detailed facial features, "
         "sophisticated lighting and shading, traditional Eastern martial arts fantasy atmosphere, "
         "elegant traditional robes with flowing fabric, dynamic swordsmanship and martial arts poses, "
@@ -97,7 +97,7 @@ ILLUST_STYLES: dict[str, str] = {
         "powerful yet graceful visual expression."
     ),
     "로맨스판타지": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, delicate facial features, "
         "sophisticated lighting and shading, elegant European-inspired fantasy atmosphere, "
         "luxurious aristocratic costumes, intricate lace embroidery and sparkling jewelry, "
@@ -1288,7 +1288,7 @@ def view_closed(code: str, room: dict, dev: str):
     if top == 0:
         if len(room["stories"]) == 1:  # 작품 1건뿐이면 그 작품을 1등으로 공개
             winners = list(room["stories"])
-            st.subheader("🏆 오늘의 1등")
+            st.subheader("오늘의 1등")
             s = room["stories"][winners[0]]
             with st.container(border=True):
                 st.markdown(f"{s['genre']} · **0표** (투표 없이 단독 1등)")
