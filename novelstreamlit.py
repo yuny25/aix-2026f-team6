@@ -1300,25 +1300,25 @@ def view_closed(code: str, room: dict, dev: str):
 
     others = [(rank, sid, v) for rank, sid, v in ranking(room) if sid not in winners]
     if others:
-        tab_result, tab_others = st.tabs(["🏆 결과", f"📚 나머지 소설 ({len(others)})"])
+        tab_result, tab_others = st.tabs(["결과", f"나머지 소설 ({len(others)})"])
     else:
         tab_result, tab_others = st.container(), None
 
     with tab_result:
-        st.subheader("📊 전체 순위")
+        st.subheader("전체 순위")
         for rank, sid, v in ranking(room):
             mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
-            mark = " 🏆" if sid in winners else ""
+            mark = " " if sid in winners else ""
             st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
 
-        st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
+        st.subheader("오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
         for sid in winners:
             s = room["stories"][sid]
             with st.container(border=True):
                 st.markdown(f"{s['genre']} · **{top}표**")
                 st.code(s["text"], language=None, wrap_lines=True)
                 if s["author"] == dev:
-                    st.caption("🎉 내가 쓴 작품이에요!")
+                    st.caption("내가 쓴 작품이에요!")
         illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
 
     if tab_others is not None:
