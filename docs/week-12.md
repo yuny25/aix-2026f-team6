@@ -1,49 +1,64 @@
 # 12주차 활동지 / Week 12 Worksheet
 
-**테스트와 검증 / Testing and verification**
+**중간 데모와 상호 리뷰 / Interim demo and peer review**
 
-- 작성일 / Date: 
-- 참여자 / Present: 
-- 결과보고서 / Report chapter: 7장 검증과 실행 환경
-- 최종 반영 / Feeds into: tests/ 폴더
+- 작성일 / Date: 11/18
+- 참여자 / Present: 장윤영, 김현승, 이다현, 박정하
+- 결과보고서 / Report chapter: 8장 결과와 한계
+- 최종 반영 / Feeds into: 협업 평가 근거 / collaboration evidence
 
 ---
 
-## 테스트 3개 / Three tests (대상 / 검증 내용)
+## ① 착수 점검표 / Start checklist
 
-1.
-2.
-3.
+수업 시작 후 10분 안에 확인합니다. 체크되지 않은 항목이 있으면 그것부터 해결하고 개발을 시작합니다.
+*Check within the first 10 minutes. Fix any unchecked item before you start coding.*
 
-## 일부러 망가뜨렸을 때 실패했는가 / Did it fail when you broke the code?
+- [x] 초기 파일이 저장소에 올라와 있다 / Initial files are in the repository
+- [x] 7주차 이슈가 GitHub에 등록되어 있고 담당자가 지정되어 있다 / Week 7 issues are on GitHub with owners
+- [x] 팀원 모두 같은 환경에서 실행된다 / Everyone can run it in the same environment
+- [x] 브랜치 규칙을 정했다 / Branch rule agreed — 
 
-- [ ] Yes
-- [ ] No → 이유 Why:
+---
 
-## AI 코드리뷰 관점 2개 / 주요 지적 / Two review perspectives
+## ② 개발 일정 / Development schedule
 
+5주차 **작업 순서**와 7주차 **이슈·마일스톤**을 바탕으로 이슈를 주차별로 배치합니다.
+*Place your issues week by week, based on the Week 5 work order and Week 7 issues and milestones.*
 
+- 11주차에 MVP가 동작해야 합니다. / Fill backwards from the deadlines.
+- 선행 이슈가 끝나기 전에 뒤 이슈를 넣지 않습니다. / Never schedule an issue before the ones it depends on.
+- 한 사람에게 몰리지 않았는지 확인합니다. / Check that no one is overloaded.
 
-## 받아들이지 않은 지적과 이유 / Findings rejected and why
+| 주차 Week | 수업 일정 Class | 끝낼 이슈 # Issues to close | 담당 Owner |
+|---|---|---|---|
+| 9주차 | 개발 착수 | #1 ~ #6 | 장윤영 |
+| 10주차 | 막힘 진단 · 데모 시나리오 초안 | #1 ~ #6 | 박정하 |
+| 11주차 | **MVP 완료 · 중간 데모** | #1 ~ #6 | 김현승 |
+| 12주차 | 핵심 경로 테스트 | #1 ~ #7 | 이다현 |
+| 13주차 | **배포 · 실행 패키지** | #1 ~ #7 | 장윤영 |
 
+> 일정이 맞지 않으면 기능을 줄입니다. 뺀 기능은 5주차 Won't 목록에 옮깁니다.
+> *If it doesn't fit, cut scope and move the feature to your Week 5 Won't list.*
 
+---
 
-## 배포 전 점검 / Pre-deployment check
+## ③ 이번 주 목표 이슈 / This week's issues
 
-- [ ] 키 노출 없음 No keys
-- [ ] 입력 검증 Input validation
-- [ ] 오류 노출 없음 No error leakage
-- [ ] 외부 장애 대응 External failure
+| # | 제목 Title | 담당 Owner | 완료 Done |
+|---|---|---|---|
+|  | 코드 설명 작성, 결과보고서 작성 | 장윤영 | [v] |
+|  | 발표자료 준비 | 박정하 | [v] |
+|  | 발표자료 준비 | 이다현 | [v] |
+|  | 검토 및 개선 | 김현승 | [v] |
+
+---
+
+## ④ 오늘 진행한 것 / Progress today
+
+- [x] 이번 활동에서 AI를 사용했다면 `PROMPTS.md`에 기록했습니다 / Logged any AI use in `PROMPTS.md`
 
 ---
 
 > 수업 종료 시 커밋하세요 / Commit this at the end of class
-> `git add docs/week-12.md && git commit -m "docs: 12주차 활동지 작성"`
-
-## 알고도 고치지 못한 것 / Known and unfixed  → `ETHICS.md` 5절
-
-| 문제 | 왜 못 고쳤나 | 사용자에게 알릴 것인가 |
-|---|---|---|
-|  |  |  |
-
-> 감추지 않는 것이 평가 대상입니다. 여기 적힌 내용은 감점 사유가 아닙니다.
+> `git add docs/week-11.md && git commit -m "docs: 11주차 활동지 작성"`
