@@ -806,6 +806,10 @@ HERO_CSS = """
     .hero-banner { left: 0; right: 0; opacity: .5; }
     .hero-tag, .hero-sub { max-width: 100%; }
 }
+.hero-title {
+    line-height: 1.3 !important;    /* 줄 높이를 늘려 y의 꼬리까지 상자 안에 포함 */
+    padding-bottom: .12em;          /* 아래 여유 */
+}
 """
 
 MODE_CSS = """
