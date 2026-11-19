@@ -64,10 +64,12 @@ ILLUST_STALE_SEC = 180                  # '생성 중' 3분 초과 시 선점 �
 ILLUST_MAX_ATTEMPTS = 3                 # 방당 삽화 생성 시도 상한(비용 보호)
 POLL_SEC = 5                            # 다른 참여자 변화 확인 주기
 
-API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-# 모델명은 개발 단계에서 비교 후 정하기로 했으므로 환경 변수로 교체 가능
-TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.1-flash-lite")
+TEXT_API_BASE = os.getenv("TEXT_API_BASE", "https://generativelanguage.googleapis.com/v1beta/openai")
+TEXT_MODEL = os.getenv("TEXT_MODEL", "gemini-3.1-flash-lite")  # Groq 등으로 바꾸려면 환경변수로 교체
+
+IMAGE_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
+
 
 GENRES = {
     "현대판타지": "현대 한국에 던전과 각성자가 존재한다. 헌터, 길드, 게이트, 스킬 창 같은 용어를 쓴다.",
@@ -78,7 +80,7 @@ GENRES = {
 # 장르별 삽화 그림 방식 (명세 7장). 키는 GENRES와 동일해야 함
 ILLUST_STYLES: dict[str, str] = {
     "현대판타지": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, detailed facial features, "
         "sophisticated lighting and shading, modern urban fantasy atmosphere, "
         "contemporary cityscapes blended with supernatural elements, mystical magical effects, "
@@ -86,7 +88,7 @@ ILLUST_STYLES: dict[str, str] = {
         "cool and vivid color palette, immersive composition, visually striking fantasy aesthetics."
     ),
     "무협": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, detailed facial features, "
         "sophisticated lighting and shading, traditional Eastern martial arts fantasy atmosphere, "
         "elegant traditional robes with flowing fabric, dynamic swordsmanship and martial arts poses, "
@@ -95,7 +97,7 @@ ILLUST_STYLES: dict[str, str] = {
         "powerful yet graceful visual expression."
     ),
     "로맨스판타지": (
-        "Korean web novel illustration style, high-quality semi-realistic digital painting, "
+        "Korean web novel illustration style, high-quality digital painting, "
         "polished character rendering, refined linework, delicate facial features, "
         "sophisticated lighting and shading, elegant European-inspired fantasy atmosphere, "
         "luxurious aristocratic costumes, intricate lace embroidery and sparkling jewelry, "
@@ -105,7 +107,7 @@ ILLUST_STYLES: dict[str, str] = {
     ),
 }
 
-PHASE_LABEL = {"input": "✏️ 일상 쓰는 중", "vote": "🗳️ 투표 중", "closed": "🏁 종료"}
+PHASE_LABEL = {"input": "일상 쓰는 중", "vote": "투표 중", "closed": "종료"}
 
 MSG_AI_OFF = "지금은 소설을 만들 수 없어요"
 
@@ -327,130 +329,90 @@ def _secret(name: str):
         return None
 
 
-def get_api_key():
-    name = "GOOGLE_API_KEY_PROD" if APP_ENV == "prod" else "GOOGLE_API_KEY_DEV"
-    return _secret(name)  # 개발 환경에서 실전 키로 대체하지 않음
+def get_text_key():
+    name = "TEXT_API_KEY_PROD" if APP_ENV == "prod" else "TEXT_API_KEY_DEV"
+    return _secret(name)
 
 
-def _generate(model: str, body: dict, timeout: int) -> dict:
-    key = get_api_key()
-
-    if not key:
-        raise AIUnavailable()
-
-    max_attempts = 4
-
-    for attempt in range(max_attempts):
-        try:
-            r = requests.post(
-                f"{API_BASE}/models/{model}:generateContent",
-                headers={
-                    "x-goog-api-key": key,
-                    "Content-Type": "application/json"
-                },
-                json=body,
-                timeout=(15, timeout)
-            )
-
-            # 정상 응답
-            if r.status_code == 200:
-                data = r.json()
-
-                if (data.get("promptFeedback") or {}).get("blockReason"):
-                    raise AIBlocked()
-
-                cands = data.get("candidates") or []
-
-                if not cands:
-                    raise AIBlocked()
-
-                if "SAFETY" in str(cands[0].get("finishReason", "")):
-                    raise AIBlocked()
-
-                return cands[0]
-            
-             # 재시도할 오류
-            if r.status_code in (429, 500, 502, 503, 504):
-                if attempt < max_attempts - 1:
-                    wait = 2 ** (attempt + 1)
-
-                    print(
-                        f"[AI] HTTP {r.status_code} "
-                        f"- {wait}초 후 재시도 "
-                        f"({attempt + 1}/{max_attempts - 1})",
-                        file=sys.stderr
-                    )
-
-                    time.sleep(wait)
-                    continue
-
-            # 재시도 대상이 아니거나 재시도 횟수 초과
-            try:
-                detail = (r.json().get("error") or {}).get("message", "")
-            except ValueError:
-                detail = ""
-
-            print(
-                f"[AI] {model} HTTP {r.status_code}: {detail[:300]}",
-                file=sys.stderr
-            )
-
-            raise AIError(f"HTTP {r.status_code}: {detail[:200]}")
-
-        except AIBlocked:
-            raise
-
-        except requests.RequestException as e:
-            if attempt < max_attempts - 1:
-                wait = 2 ** (attempt + 1)
-
-                print(
-                    f"[AI] {type(e).__name__} "
-                    f"- {wait}초 후 재시도",
-                    file=sys.stderr
-                )
-
-                time.sleep(wait)
-                continue
-
-            raise AIError(type(e).__name__) from e
-
-    raise AIError("재시도 횟수 초과")
+def get_image_key():
+    name = "IMAGE_API_KEY_PROD" if APP_ENV == "prod" else "IMAGE_API_KEY_DEV"
+    return _secret(name)
 
 
-
-    
+def ai_key_status() -> str:
+    return (f"소설 키: {'있음' if get_text_key() else '없음'} · "
+            f"삽화 키: {'있음' if get_image_key() else '없음'}")
 
 
 def gemini_text(prompt: str) -> str:
-    cand = _generate(
-        TEXT_MODEL,
-        {"contents": [{"parts": [{"text": prompt}]}],
-         "generationConfig": {"temperature": 1.0}},
-        timeout=180,
-    )
-    parts = (cand.get("content") or {}).get("parts") or []
-    text = "".join(p.get("text", "") for p in parts).strip()
-    if not text:
-        raise AIBlocked()
-    return text
+    key = get_text_key()
+    if not key:
+        raise AIUnavailable()
+    for attempt in range(4):
+        try:
+            r = requests.post(
+                f"{TEXT_API_BASE}/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": TEXT_MODEL, "temperature": 1.0,
+                      "messages": [{"role": "user", "content": prompt}]},
+                timeout=(15, 120),
+            )
+        except requests.RequestException as e:
+            if attempt < 3:
+                time.sleep(2 ** (attempt + 1)); continue
+            raise AIError(type(e).__name__) from e
+        if r.status_code == 200:
+            ch = (r.json().get("choices") or [{}])[0]
+            if ch.get("finish_reason") == "content_filter":
+                raise AIBlocked()
+            text = ((ch.get("message") or {}).get("content") or "").strip()
+            if not text:
+                raise AIBlocked()
+            return text
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < 3:
+            time.sleep(2 ** (attempt + 1)); continue
+        raise AIError(f"HTTP {r.status_code}: {r.text[:200]}")
+    raise AIError("재시도 횟수 초과")
 
 
 def gemini_image(prompt: str):
-    import base64
+    """Gemini 이미지 모델 호출. 반환: (이미지 bytes, mime)"""
+    key = get_image_key()
+    if not key:
+        raise AIUnavailable()
 
-    cand = _generate(
-        IMAGE_MODEL,
-        {"contents": [{"parts": [{"text": prompt}]}],
-         "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}},
-        timeout=120,
-    )
-    for p in (cand.get("content") or {}).get("parts") or []:
-        blob = p.get("inlineData") or p.get("inline_data")
-        if blob and blob.get("data"):
-            mime = blob.get("mimeType") or blob.get("mime_type") or "image/png"
-            return base64.b64decode(blob["data"]), mime
-    raise AIBlocked()
+    for attempt in range(4):
+        try:
+            r = requests.post(
+                f"{IMAGE_API_BASE}/models/{IMAGE_MODEL}:generateContent",
+                headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                json={"contents": [{"parts": [{"text": prompt}]}],
+                      "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}},
+                timeout=(15, 120),
+            )
+        except requests.RequestException as e:
+            if attempt < 3:
+                time.sleep(2 ** (attempt + 1)); continue
+            raise AIError(type(e).__name__) from e
+
+        if r.status_code == 200:
+            data = r.json()
+            if (data.get("promptFeedback") or {}).get("blockReason"):
+                raise AIBlocked()
+            cands = data.get("candidates") or []
+            if not cands or "SAFETY" in str(cands[0].get("finishReason", "")):
+                raise AIBlocked()
+            for p in (cands[0].get("content") or {}).get("parts") or []:
+                blob = p.get("inlineData") or p.get("inline_data")
+                if blob and blob.get("data"):
+                    mime = blob.get("mimeType") or blob.get("mime_type") or "image/png"
+                    return base64.b64decode(blob["data"]), mime
+            raise AIBlocked()
+
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < 3:
+            time.sleep(2 ** (attempt + 1)); continue
+        raise AIError(f"HTTP {r.status_code}: {r.text[:200]}")
+    raise AIError("재시도 횟수 초과")
 
 
 def build_story_prompt(genre: str, daily: str) -> str:
@@ -467,7 +429,12 @@ def build_story_prompt(genre: str, daily: str) -> str:
         "4. 3인칭 과거형, 한 문단 또는 두 문단으로 쓴다.\n"
         "5. 가볍고 웃긴 톤으로, 마지막 문장에 짧은 반전이나 여운을 둔다.\n"
         "6. 실존 인물, 실제 브랜드, 혐오·성적·폭력적 표현은 쓰지 않는다.\n"
-        "7. 제목, 설명, 머리말 없이 소설 본문만 출력한다."
+        "7. 기존에 발표된 소설, 웹툰, 만화, 애니메이션, 게임, 영화, 드라마의 등장인물 이름·별명·"
+        "고유 설정(기술 이름, 조직 이름)을 쓰지 않는다. "
+        "등장인물 이름이 필요하면 이 세상에 없는 새로운 이름을 지어 쓰고, "
+        "일상에 나온 사람의 실명이나 별명은 그대로 쓰지 않는다. "
+        "이름이 꼭 필요하지 않은 장면에서는 '그', '그녀', 직업이나 호칭(헌터, 검객, 영애 등)으로 부른다.\n"
+        "8. 제목, 설명, 머리말 없이 소설 본문만 출력한다."
     )
 
 def build_illust_prompt(story: str, genre: str) -> str:
@@ -844,6 +811,10 @@ HERO_CSS = """
     .hero-banner { left: 0; right: 0; opacity: .5; }
     .hero-tag, .hero-sub { max-width: 100%; }
 }
+.hero-title {
+    line-height: 1.3 !important;    /* 줄 높이를 늘려 y의 꼬리까지 상자 안에 포함 */
+    padding-bottom: .12em;          /* 아래 여유 */
+}
 """
 
 MODE_CSS = """
@@ -1044,13 +1015,13 @@ def render_examples():
 def view_home(dev: str):
     left, right = st.columns([3, 2], gap="large")
     with left:
-        tab_create, tab_join = st.tabs(["✏️ 방 만들기", "👥 방 입장"])
+        tab_create, tab_join = st.tabs(["방 만들기", "방 입장"])
 
         with tab_create:
             st.markdown("#### 함께 쓸 이야기의 시작")
             st.write("방을 만들면 6자리 코드가 생겨요. 코드를 지인에게 알려 주세요.")
             st.caption("투표 종료 시각은 모두 제출한 뒤, 투표를 시작할 때 정해요.")
-            if st.button("✨ 방 만들기", type="primary", use_container_width=True):
+            if st.button("방 만들기", type="primary", use_container_width=True):
                 code = create_room(dev)
                 if code:
                     st.session_state["room_code"] = code
@@ -1186,7 +1157,7 @@ def view_input(code: str, room: dict, dev: str):
             st.warning("장르를 골라 주세요")
         elif not (MIN_CHARS <= n <= MAX_CHARS):
             st.warning(f"{MIN_CHARS}자 이상 {MAX_CHARS}자 이하로 적어 주세요 (지금 {n}자)")
-        elif not get_api_key():
+        elif not get_text_key():
             st.error(MSG_AI_OFF)
         else:
             with st.spinner("AI가 소설을 쓰는 중이에요… (보통 10초 안팎)"):
@@ -1280,7 +1251,7 @@ def illust_area(code: str, dev: str):
         if il["status"] == "generating" and now() - il["started"] > ILLUST_STALE_SEC:
             il["status"] = "waiting"  # 3분 넘게 멈춘 선점 해제
         if (il["status"] == "waiting" and il["attempts"] < ILLUST_MAX_ATTEMPTS
-                and not failed_here and get_api_key()):
+                and not failed_here and get_image_key()):
             il["status"], il["by"], il["started"] = "generating", dev, now()
             il["attempts"] += 1
             claim = True
@@ -1306,7 +1277,7 @@ def illust_area(code: str, dev: str):
                            mime=il["mime"] or "image/png", use_container_width=True)  # FR-09
     elif il["status"] == "generating":
         st.info("그림을 만드는 중이에요")
-    elif not get_api_key():
+    elif not get_image_key():
         st.caption("지금은 그림을 만들 수 없어요")
     elif il["attempts"] >= ILLUST_MAX_ATTEMPTS:
         st.caption("그림을 만들지 못했어요")
@@ -1326,7 +1297,7 @@ def view_closed(code: str, room: dict, dev: str):
     if top == 0:
         if len(room["stories"]) == 1:  # 작품 1건뿐이면 그 작품을 1등으로 공개
             winners = list(room["stories"])
-            st.subheader("🏆 오늘의 1등")
+            st.subheader("오늘의 1등")
             s = room["stories"][winners[0]]
             with st.container(border=True):
                 st.markdown(f"{s['genre']} · **0표** (투표 없이 단독 1등)")
@@ -1338,25 +1309,25 @@ def view_closed(code: str, room: dict, dev: str):
 
     others = [(rank, sid, v) for rank, sid, v in ranking(room) if sid not in winners]
     if others:
-        tab_result, tab_others = st.tabs(["🏆 결과", f"📚 나머지 소설 ({len(others)})"])
+        tab_result, tab_others = st.tabs(["결과", f"나머지 소설 ({len(others)})"])
     else:
         tab_result, tab_others = st.container(), None
 
     with tab_result:
-        st.subheader("📊 전체 순위")
+        st.subheader("전체 순위")
         for rank, sid, v in ranking(room):
             mine = " (내 작품)" if room["stories"][sid]["author"] == dev else ""
-            mark = " 🏆" if sid in winners else ""
+            mark = " " if sid in winners else ""
             st.markdown(f"**{rank}위** · {story_label(room, sid)}{mine} · {v}표{mark}")
 
-        st.subheader("🏆 오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
+        st.subheader("오늘의 1등" + (" (공동 1등)" if len(winners) > 1 else ""))
         for sid in winners:
             s = room["stories"][sid]
             with st.container(border=True):
                 st.markdown(f"{s['genre']} · **{top}표**")
                 st.code(s["text"], language=None, wrap_lines=True)
                 if s["author"] == dev:
-                    st.caption("🎉 내가 쓴 작품이에요!")
+                    st.caption("내가 쓴 작품이에요!")
         illust_area(code, dev)  # 소설 맨 끝에 삽화 삽입
 
     if tab_others is not None:
@@ -1378,7 +1349,7 @@ def view_room(code: str, room: dict, dev: str):
     c1, c2 = st.columns([3, 1])
     with c1:
         st.markdown(f"**방 코드** &nbsp; `{code}` &nbsp; {PHASE_LABEL[phase]}"
-                    + (" · 👑 방장" if room["host"] == dev else ""))
+                    + (" · 방장" if room["host"] == dev else ""))
     with c2:
         if st.button("방 나가기", use_container_width=True):
             leave_room(dev)
@@ -1438,13 +1409,13 @@ def main():
     if room is not None:
         render_brand()
         if APP_ENV != "prod":
-            st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
+            st.caption(f"환경: {APP_ENV} · {ai_key_status()}")
         st.session_state["room_code"] = code
         view_room(code, room, dev)
     else:
         render_hero()
         if APP_ENV != "prod":
-            st.caption(f"환경: {APP_ENV} · AI 키: {'있음' if get_api_key() else '없음'}")
+            st.caption(f"환경: {APP_ENV} · {ai_key_status()}")
         if code:
             st.warning({"missing": "방을 찾을 수 없어요",
                         "expired": "만료된 방이에요",
